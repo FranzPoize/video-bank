@@ -3,12 +3,16 @@
 
 {% block content %}
 <div style="max-width: 900px; margin: 0 auto;">
-    <a href="/" style="color: #4361ee; text-decoration: none; display: inline-block; margin-bottom: 1rem;">&larr; Back to all videos</a>
-
-    <h1 style="margin-bottom: 0.5rem;">{{ video.name }}</h1>
-    <p style="color: #888; font-size: 0.9rem; margin-bottom: 1.5rem;">
-        Uploaded {{ video.upload_date }} &middot; {{ "%.1f"|format(video.file_size / (1024*1024)) }} MB
-    </p>
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+        <div>
+            <a href="/" style="color: #4361ee; text-decoration: none; display: inline-block; margin-bottom: 0.5rem;">&larr; Back to all videos</a>
+            <h1 style="margin-bottom: 0.25rem;">{{ video.name }}</h1>
+            <p style="color: #888; font-size: 0.9rem;">
+                Uploaded {{ video.upload_date }} &middot; {{ "%.1f"|format(video.file_size / (1024*1024)) }} MB
+            </p>
+        </div>
+        <a href="/video/{{ video.id }}/edit" class="btn btn-primary btn-sm">Edit</a>
+    </div>
 
     <div style="background: #000; border-radius: 10px; overflow: hidden; margin-bottom: 1.5rem;">
         <video controls style="width: 100%; display: block;" preload="metadata">

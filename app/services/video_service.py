@@ -110,3 +110,19 @@ async def list_videos_with_tags(db) -> list[dict]:
     for v in videos:
         v["tags"] = await tag_service.get_video_tags(db, v["id"])
     return videos
+
+
+async def list_videos_by_tag(db, tag_id: int) -> list[dict]:
+    """Return videos that have a specific tag."""
+    cursor = await db.execute(
+        """SELECT v.* FROM videos v
+           JOIN video_tags vt ON v.id = vt.video_id
+           WHERE vt.tag_id = ?
+           ORDER BY v.upload_date DESC""",
+        (tag_id,),
+    )
+    rows = await cursor.fetchall()
+    videos = [dict(r) for r in rows]
+    for v in videos:
+        v["tags"] = await tag_service.get_video_tags(db, v["id"])
+    return videos

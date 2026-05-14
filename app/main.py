@@ -11,6 +11,8 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # Ensure the project root is on sys.path for imports
 _project_root = Path(__file__).resolve().parent.parent
@@ -19,6 +21,7 @@ if str(_project_root) not in sys.path:
 
 from app.database import init_db
 from app.routes.videos import router as videos_router
+from app.routes.tags import router as tags_router
 
 app = FastAPI(title="Video Bank")
 
@@ -32,6 +35,30 @@ app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 # Include routers
 app.include_router(videos_router)
+app.include_router(tags_router)
+
+# Templates for error pages
+templates = Jinja2Templates(directory=str(_project_root / "app" / "templates"))
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request, exc):
+    """Return a styled error page for HTTP errors."""
+    return templates.TemplateResponse(
+        request, "error.html",
+        {"status_code": exc.status_code, "detail": exc.detail},
+        status_code=exc.status_code,
+    )
+
+
+@app.exception_handler(404)
+async def not_found_handler(request, exc):
+    """Override 404 with a custom template."""
+    return templates.TemplateResponse(
+        request, "error.html",
+        {"status_code": 404, "detail": "The page you're looking for doesn't exist."},
+        status_code=404,
+    )
 
 
 @app.on_event("startup")

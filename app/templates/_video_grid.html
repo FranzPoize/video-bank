@@ -29,6 +29,11 @@
     </div>
     {% endfor %}
 </div>
+{% elif active_tag_id is not none %}
+<div class="empty-state">
+    <p>No videos match this filter.</p>
+    <p style="margin-top: 1rem;"><a href="/" class="btn btn-primary">Clear filter</a></p>
+</div>
 {% else %}
 <div class="empty-state">
     <p>No videos yet.</p>
