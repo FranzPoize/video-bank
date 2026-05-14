@@ -32,11 +32,12 @@ from app.main import app as _app
 async def db() -> AsyncGenerator[aiosqlite.Connection, None]:
     """Create a fresh in-memory database for each test."""
     db_conn = await aiosqlite.connect(":memory:")
+    await db_conn.execute("PRAGMA foreign_keys = ON")
     db_conn.row_factory = aiosqlite.Row
 
     # Initialize schema directly on this connection
     from app.database import MIGRATIONS
-    for version in range(1, 2):  # migration_version=1
+    for version in range(1, 4):  # migration_version=3 (includes tags schema)
         for stmt in MIGRATIONS.get(version, []):
             await db_conn.execute(stmt)
     await db_conn.commit()

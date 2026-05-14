@@ -37,7 +37,7 @@ app.include_router(videos_router)
 @app.on_event("startup")
 async def on_startup():
     """Initialize database and verify environment on server start."""
-    await init_db(migration_version=1)
+    await init_db(migration_version=3)
 
     # Check for ffmpeg (soft warning — degraded mode without it)
     # This is expanded in Checkpoint 2

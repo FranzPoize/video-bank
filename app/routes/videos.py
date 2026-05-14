@@ -43,8 +43,8 @@ def _video_to_card(video: dict) -> dict:
 
 @router.get("/")
 async def list_videos(request: Request, db=Depends(get_db)):
-    """Show all videos. HTMX requests get just the grid fragment."""
-    videos = await video_service.list_videos(db)
+    """Show all videos with their tags. HTMX requests get just the grid fragment."""
+    videos = await video_service.list_videos_with_tags(db)
     enriched = [_video_to_card(v) for v in videos]
 
     is_htmx = request.headers.get("HX-Request") == "true"
@@ -65,6 +65,7 @@ async def create_video(
     request: Request,
     name: str = Form(...),
     file: UploadFile = File(...),
+    tags: str = Form(""),  # Comma-separated tags
     db=Depends(get_db),
 ):
     """Handle video upload. Redirects to list on success."""
@@ -79,6 +80,7 @@ async def create_video(
             original_name=file.filename or "untitled",
             mime_type=file.content_type or "application/octet-stream",
             file_size=len(content),
+            tags=tags,
         )
     except ValueError as e:
         return templates.TemplateResponse(
@@ -110,8 +112,8 @@ async def stream_video(video_id: int, db=Depends(get_db)):
 
 @router.get("/video/{video_id}")
 async def video_detail(request: Request, video_id: int, db=Depends(get_db)):
-    """Show video detail page with player."""
-    video = await video_service.get_video(db, video_id)
+    """Show video detail page with player and tags."""
+    video = await video_service.get_video_with_tags(db, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
 

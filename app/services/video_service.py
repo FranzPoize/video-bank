@@ -6,7 +6,7 @@ This keeps them testable with in-memory databases.
 """
 
 from app.database import get_db
-from app.services import file_service
+from app.services import file_service, tag_service
 
 
 async def create_video(
@@ -16,6 +16,7 @@ async def create_video(
     original_name: str,
     mime_type: str,
     file_size: int,
+    tags: str = "",  # Comma-separated tag string
 ) -> dict:
     """Save a video file and create a database record.
     
@@ -40,6 +41,12 @@ async def create_video(
     )
     await db.commit()
     video_id = cursor.lastrowid
+
+    # Store tags
+    if tags and tags.strip():
+        tag_names = [t.strip() for t in tags.split(",") if t.strip()]
+        if tag_names:
+            await tag_service.set_video_tags(db, video_id, tag_names)
 
     return await get_video(db, video_id)
 
@@ -86,3 +93,20 @@ async def delete_video(db, video_id: int) -> bool:
     await db.execute("DELETE FROM videos WHERE id = ?", (video_id,))
     await db.commit()
     return True
+
+
+async def get_video_with_tags(db, video_id: int) -> dict | None:
+    """Fetch a video along with its tags."""
+    video = await get_video(db, video_id)
+    if video is None:
+        return None
+    video["tags"] = await tag_service.get_video_tags(db, video_id)
+    return video
+
+
+async def list_videos_with_tags(db) -> list[dict]:
+    """Return all videos with their tags."""
+    videos = await list_videos(db)
+    for v in videos:
+        v["tags"] = await tag_service.get_video_tags(db, v["id"])
+    return videos
