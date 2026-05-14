@@ -1,0 +1,31 @@
+<div id="main-content">
+    {% if all_tags and all_tags|length > 0 %}
+    <div id="filter-bar" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; align-items: center;">
+        <span style="font-size: 0.85rem; color: #888; font-weight: 600;">Filter:</span>
+
+        <a href="/"
+           class="btn btn-sm {% if active_tag_id is none %}btn-primary{% else %}btn-inactive{% endif %}"
+           hx-get="/"
+           hx-target="#main-content"
+           hx-swap="outerHTML"
+           hx-push-url="true">
+            All
+        </a>
+
+        {% for tag in all_tags %}
+        <a href="/?tag_id={{ tag.id }}"
+           class="btn btn-sm {% if active_tag_id == tag.id %}btn-primary{% else %}btn-inactive{% endif %}"
+           hx-get="/?tag_id={{ tag.id }}"
+           hx-target="#main-content"
+           hx-swap="outerHTML"
+           hx-push-url="true">
+            {{ tag.name }}
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div id="video-grid">
+        {% include "_video_grid.html" %}
+    </div>
+</div>
