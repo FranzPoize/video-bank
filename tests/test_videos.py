@@ -4,7 +4,12 @@ Tests for video upload and listing (Checkpoint 1).
 Run with: pytest tests/test_videos.py -v
 """
 
+import collections
 import pytest
+from unittest.mock import patch
+
+# shutil.disk_usage returns a namedtuple; use same shape for mocks
+DiskUsage = collections.namedtuple("DiskUsage", ["total", "used", "free"])
 
 
 class TestVideoList:
@@ -377,3 +382,108 @@ class TestAsyncUpload:
         )
         assert response.status_code == 303
         assert response.headers["location"] == "/"
+
+
+class TestDiskSpace:
+    """Tests for disk space indicator and upload guard."""
+
+    @pytest.mark.asyncio
+    async def test_available_space(self):
+        """get_available_space computes free_gb and percent_used correctly."""
+        from app.services.file_service import get_available_space
+
+        with patch("app.services.file_service.shutil.disk_usage") as mock_du:
+            # 500GB used out of 1TB → 50% used
+            mock_du.return_value = DiskUsage(1_000_000_000_000, 500_000_000_000, 500_000_000_000)
+            result = get_available_space()
+
+        assert result.get("error") is not True
+        assert result["total"] == 1_000_000_000_000
+        assert result["used"] == 500_000_000_000
+        assert result["free"] == 500_000_000_000
+        assert result["percent_used"] == 0.5
+        # 500 GB / 1024^3 ≈ 465.7
+        assert result["free_gb"] == 465.7
+
+    @pytest.mark.asyncio
+    async def test_disk_usage_error_handling(self, client):
+        """When shutil.disk_usage raises OSError, upload still works."""
+        from app.services.file_service import get_available_space
+
+        with patch("app.services.file_service.shutil.disk_usage") as mock_du:
+            mock_du.side_effect = OSError("Permission denied")
+
+            # Sentinel dict is returned
+            result = get_available_space()
+            assert result.get("error") is True
+
+            # Upload should NOT be blocked by a failing space check
+            response = await client.post(
+                "/api/videos",
+                data={"name": "Disk Error Test"},
+                files={"file": ("error.mp4", b"fake-content", "video/mp4")},
+            )
+        assert response.status_code == 303
+
+    @pytest.mark.asyncio
+    async def test_upload_rejected_disk_full(self, client):
+        """Upload rejected when projected disk usage > 95%."""
+        with patch("app.services.file_service.shutil.disk_usage") as mock_du:
+            # 951GB used out of 1TB → 95.1% — any tiny file pushes over 95%
+            mock_du.return_value = DiskUsage(1_000_000_000_000, 951_000_000_000, 49_000_000_000)
+
+            response = await client.post(
+                "/api/videos",
+                data={"name": "Full Disk"},
+                files={"file": ("full.mp4", b"oops", "video/mp4")},
+            )
+        assert response.status_code == 400
+        assert "disk space" in response.text.lower()
+
+    @pytest.mark.asyncio
+    async def test_upload_allowed_disk_available(self, client):
+        """Upload succeeds when there is plenty of disk space."""
+        with patch("app.services.file_service.shutil.disk_usage") as mock_du:
+            mock_du.return_value = DiskUsage(1_000_000_000_000, 500_000_000_000, 500_000_000_000)
+
+            response = await client.post(
+                "/api/videos",
+                data={"name": "Space Available"},
+                files={"file": ("ok.mp4", b"fake-content", "video/mp4")},
+            )
+        assert response.status_code == 303
+
+    @pytest.mark.asyncio
+    async def test_space_api_endpoint(self, client):
+        """GET /api/space returns HTML fragment with color-coded space info."""
+        with patch("app.services.file_service.shutil.disk_usage") as mock_du:
+            # 500GB used out of 1TB → 50% → space-ok (green)
+            mock_du.return_value = DiskUsage(1_000_000_000_000, 500_000_000_000, 500_000_000_000)
+
+            response = await client.get("/api/space")
+        assert response.status_code == 200
+        assert "text/html" in response.headers["content-type"]
+        assert "GB free" in response.text
+        assert "space-ok" in response.text
+
+    @pytest.mark.asyncio
+    async def test_space_api_endpoint_critical(self, client):
+        """GET /api/space shows space-critical class when disk is near full."""
+        with patch("app.services.file_service.shutil.disk_usage") as mock_du:
+            # 950GB used out of 1TB → 95% → space-critical (red)
+            mock_du.return_value = DiskUsage(1_000_000_000_000, 950_000_000_000, 50_000_000_000)
+
+            response = await client.get("/api/space")
+        assert response.status_code == 200
+        assert "space-critical" in response.text
+
+    @pytest.mark.asyncio
+    async def test_space_api_endpoint_error(self, client):
+        """GET /api/space shows 'Space: unknown' when disk_usage fails."""
+        with patch("app.services.file_service.shutil.disk_usage") as mock_du:
+            mock_du.side_effect = OSError("Permission denied")
+
+            response = await client.get("/api/space")
+        assert response.status_code == 200
+        assert "Space: unknown" in response.text
+        assert "space-critical" in response.text

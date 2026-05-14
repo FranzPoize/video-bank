@@ -100,6 +100,11 @@
             .video-player { border-radius: 6px; }
             .video-player video { max-height: 40vh; }
         }
+
+        /* Space indicator in nav bar */
+        .space-ok { color: #2d6a4f; background: #d8f3dc; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; white-space: nowrap; }
+        .space-warn { color: #936639; background: #fff3cd; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; white-space: nowrap; }
+        .space-critical { color: #e63946; background: #ffe5e7; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; white-space: nowrap; }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
@@ -107,6 +112,7 @@
     <nav>
         <a href="/">Video Bank</a>
         <a href="/upload">Upload</a>
+        <span id="space-indicator" style="margin-left: auto;" hx-get="/api/space" hx-trigger="load"></span>
     </nav>
     <div class="container">
         {% block content %}{% endblock %}

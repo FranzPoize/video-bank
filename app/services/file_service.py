@@ -28,6 +28,28 @@ def _ensure_dirs():
     THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def get_available_space(directory: Path | None = None) -> dict:
+    """Return disk usage info for the given directory.
+
+    Defaults to VIDEOS_DIR. Returns total, used, free (bytes),
+    percent_used (0.0–1.0), and free_gb (human-readable, 1 decimal).
+
+    On OSError (e.g. permission denied, missing dir), returns
+    {"error": True} so callers can degrade gracefully.
+    """
+    try:
+        usage = shutil.disk_usage(directory or VIDEOS_DIR)
+        return {
+            "total": usage.total,
+            "used": usage.used,
+            "free": usage.free,
+            "percent_used": usage.used / usage.total,
+            "free_gb": round(usage.free / (1024 ** 3), 1),
+        }
+    except OSError:
+        return {"error": True}
+
+
 def _get_ext(filename: str) -> str:
     """Extract lowercase extension without dot, e.g. 'mp4'."""
     return Path(filename).suffix.lstrip(".").lower()
@@ -44,6 +66,14 @@ def validate_file(filename: str, file_size: int) -> str | None:
     if file_size > MAX_UPLOAD_SIZE:
         max_mb = MAX_UPLOAD_SIZE / (1024 * 1024)
         return f"File too large (max {max_mb:.0f}MB)."
+
+    # Disk space guard: reject if uploading would push disk past 95% capacity
+    space = get_available_space()
+    if not space.get("error"):
+        projected = (space["used"] + file_size) / space["total"]
+        if projected > 0.95:
+            return "Not enough disk space (would exceed 95% capacity)."
+
     return None
 
 

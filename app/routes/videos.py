@@ -16,7 +16,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.database import get_db
 from app.services import clip_service, tag_service, video_service
-from app.services.file_service import get_video_path
+from app.services.file_service import get_available_space, get_video_path
 
 router = APIRouter()
 templates = Jinja2Templates(
@@ -39,6 +39,20 @@ def _video_to_card(video: dict) -> dict:
         "has_thumbnail": has_thumbnail,
         "thumbnail_url": f"/uploads/thumbnails/{thumb_stem}.jpg" if has_thumbnail else None,
     }
+
+
+@router.get("/api/space")
+async def space_indicator(request: Request):
+    """Return an HTML fragment showing available disk space in the uploads directory.
+
+    This is consumed by the nav bar's hx-get in base.html. Never blocks
+    an upload — returns a gray "Space: unknown" on error.
+    """
+    space = get_available_space()
+    return templates.TemplateResponse(
+        request, "_space_fragment.html",
+        {"space": space},
+    )
 
 
 @router.get("/")

@@ -1,0 +1,9 @@
+{% if space.error %}
+<span class="space-critical">Space: unknown</span>
+{% elif space.percent_used <= 0.80 %}
+<span class="space-ok">{{ space.free_gb }} GB free</span>
+{% elif space.percent_used <= 0.90 %}
+<span class="space-warn">{{ space.free_gb }} GB free</span>
+{% else %}
+<span class="space-critical">{{ space.free_gb }} GB free</span>
+{% endif %}
