@@ -52,6 +52,54 @@
         form input[type="text"],
         form input[type="file"] { width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 6px; margin-bottom: 1rem; }
         form button[type="submit"] { margin-top: 0.5rem; }
+
+        /* Responsive video player */
+        .video-wrapper { max-width: 1100px; margin: 0 auto; }
+        .video-wrapper video { width: 100%; display: block; }
+        .video-player { background: #000; border-radius: 10px; overflow: hidden; margin-bottom: 1.5rem; }
+        .video-player video { width: 100%; display: block; max-height: 80vh; }
+
+        @media (min-width: 1200px) {
+            .video-wrapper {
+                width: min(90vw, 1400px);
+                max-width: none;
+                margin: 0;
+                position: relative;
+                left: 50%;
+                transform: translateX(-50%);
+            }
+        }
+
+        /* Clip seeker controls */
+        .seeker-controls { padding: 1rem; background: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+        .seeker-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+        .seeker-label { font-weight: 600; font-size: 0.85rem; min-width: 3rem; }
+        .seeker-start { color: #4361ee; }
+        .seeker-end { color: #e63946; }
+        .seeker-slider { flex: 1; cursor: pointer; }
+        .seeker-times { text-align: center; font-size: 1.1rem; font-weight: 600; color: #333; padding: 0.5rem 0; }
+        .seeker-hint { text-align: center; font-size: 0.8rem; color: #888; margin-bottom: 0.75rem; }
+        .seeker-error { color: #e63946; font-size: 0.9rem; margin-bottom: 0.5rem; text-align: center; }
+        .seeker-controls .btn-primary { padding: 0.75rem 2rem; font-size: 1rem; }
+
+        /* Responsive header that wraps on mobile */
+        .page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
+        .page-header h1 { font-size: clamp(1.1rem, 4vw, 1.5rem); word-break: break-word; }
+        .page-header .actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            nav { padding: 0.75rem 1rem; gap: 1rem; }
+            .page-header { flex-direction: column; }
+            .video-player video { max-height: 50vh; }
+        }
+
+        @media (max-width: 480px) {
+            .container { padding: 0.75rem; }
+            nav { padding: 0.5rem 0.75rem; }
+            .video-player { border-radius: 6px; }
+            .video-player video { max-height: 40vh; }
+        }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
