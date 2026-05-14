@@ -88,3 +88,47 @@ class TestVideoUpload:
         response = await client.get("/upload")
         assert response.status_code == 200
         assert "Upload" in response.text
+
+
+class TestVideoPlayback:
+    """Tests for video streaming and detail page."""
+
+    @pytest.mark.asyncio
+    async def test_video_detail_page(self, client):
+        """GET /video/{id} shows the detail page."""
+        # Upload first
+        await client.post(
+            "/api/videos",
+            data={"name": "Playback Test"},
+            files={"file": ("play.mp4", b"fake-content", "video/mp4")},
+        )
+
+        response = await client.get("/video/1")
+        assert response.status_code == 200
+        assert "Playback Test" in response.text
+        assert "<video" in response.text
+
+    @pytest.mark.asyncio
+    async def test_video_detail_not_found(self, client):
+        """GET /video/{id} for missing id returns 404."""
+        response = await client.get("/video/999")
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_video_stream_endpoint(self, client):
+        """GET /api/video/{id}/file returns video bytes."""
+        await client.post(
+            "/api/videos",
+            data={"name": "Stream Test"},
+            files={"file": ("stream.mp4", b"fake-video-content", "video/mp4")},
+        )
+
+        response = await client.get("/api/video/1/file")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "video/mp4"
+
+    @pytest.mark.asyncio
+    async def test_video_stream_not_found(self, client):
+        """GET /api/video/{id}/file for missing id returns 404."""
+        response = await client.get("/api/video/999/file")
+        assert response.status_code == 404

@@ -88,3 +88,45 @@ async def create_video(
         )
 
     return RedirectResponse(url="/", status_code=303)
+
+
+@router.get("/api/video/{video_id}/file")
+async def stream_video(video_id: int, db=Depends(get_db)):
+    """Stream a video file with range request support for seeking."""
+    video = await video_service.get_video(db, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    video_path = get_video_path(video["filename"])
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="File not found on disk")
+
+    return FileResponse(
+        path=str(video_path),
+        media_type=video["mime_type"],
+        filename=video["original_name"],
+    )
+
+
+@router.get("/video/{video_id}")
+async def video_detail(request: Request, video_id: int, db=Depends(get_db)):
+    """Show video detail page with player."""
+    video = await video_service.get_video(db, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    enriched = _video_to_card(video)
+    thumb_stem = Path(video["filename"]).stem
+    enriched["video_url"] = f"/api/video/{video_id}/file"
+    enriched["thumbnail_url"] = f"/uploads/thumbnails/{thumb_stem}.jpg"
+    enriched["has_thumbnail"] = (
+        Path(__file__).resolve().parent.parent.parent
+        / "uploads"
+        / "thumbnails"
+        / f"{thumb_stem}.jpg"
+    ).exists()
+
+    return templates.TemplateResponse(
+        request, "video_detail.html",
+        {"video": enriched},
+    )

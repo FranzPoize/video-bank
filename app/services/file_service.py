@@ -5,7 +5,9 @@ Thumbnail generation (ffmpeg) is a placeholder here — actual ffmpeg
 call is added in Checkpoint 2.
 """
 
+import asyncio
 import os
+import shutil
 import uuid
 from pathlib import Path
 
@@ -18,6 +20,7 @@ ALLOWED_EXTENSIONS = {
     e.strip() for e in os.environ.get("ALLOWED_EXTENSIONS", "mp4,webm,mov").split(",")
 }
 MAX_UPLOAD_SIZE = int(os.environ.get("MAX_UPLOAD_SIZE", str(500 * 1024 * 1024)))  # 500MB
+THUMBNAIL_TIME_SECONDS = int(os.environ.get("THUMBNAIL_TIME", "1"))
 
 
 def _ensure_dirs():
@@ -70,16 +73,34 @@ async def delete_thumbnail(filename: str):
 
 
 async def generate_thumbnail(video_filename: str) -> bool:
-    """Generate a thumbnail for the given video file. 
+    """Generate a thumbnail at the 1-second mark using ffmpeg.
     
-    Placeholder — returns False. Actual ffmpeg call added in Checkpoint 2.
-    
-    Design requires thumbnails but ffmpeg is validated at startup. 
-    In Checkpoint 1 we always show a placeholder.
+    Returns True if thumbnail was generated, False if ffmpeg is unavailable.
     """
     _ensure_dirs()
-    # Return False meaning "no thumbnail available"
-    return False
+    video_path = VIDEOS_DIR / video_filename
+    thumb_path = THUMBNAILS_DIR / f"{Path(video_filename).stem}.jpg"
+
+    if thumb_path.exists():
+        return True  # Already generated
+
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        return False
+
+    proc = await asyncio.create_subprocess_exec(
+        ffmpeg,
+        "-y",
+        "-ss", str(THUMBNAIL_TIME_SECONDS),
+        "-i", str(video_path),
+        "-vframes", "1",
+        "-q:v", "2",
+        str(thumb_path),
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    return_code = await proc.wait()
+    return return_code == 0 and thumb_path.exists()
 
 
 def get_video_path(filename: str) -> Path:

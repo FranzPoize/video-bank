@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ video.name }} — Video Bank{% endblock %}
+
+{% block content %}
+<div style="max-width: 900px; margin: 0 auto;">
+    <a href="/" style="color: #4361ee; text-decoration: none; display: inline-block; margin-bottom: 1rem;">&larr; Back to all videos</a>
+
+    <h1 style="margin-bottom: 0.5rem;">{{ video.name }}</h1>
+    <p style="color: #888; font-size: 0.9rem; margin-bottom: 1.5rem;">
+        Uploaded {{ video.upload_date }} &middot; {{ "%.1f"|format(video.file_size / (1024*1024)) }} MB
+    </p>
+
+    <div style="background: #000; border-radius: 10px; overflow: hidden; margin-bottom: 1.5rem;">
+        <video controls style="width: 100%; display: block;" preload="metadata">
+            <source src="{{ video.video_url }}" type="{{ video.mime_type }}">
+            Your browser does not support the video element.
+        </video>
+    </div>
+
+    {% if video.tags and video.tags|length > 0 %}
+    <div style="margin-bottom: 1.5rem;">
+        <h3 style="font-size: 0.9rem; color: #888; margin-bottom: 0.5rem;">Tags</h3>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            {% for tag in video.tags %}
+            <span style="background: #e0e7ff; color: #4361ee; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.85rem;">
+                {{ tag }}
+            </span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
