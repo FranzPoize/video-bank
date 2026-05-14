@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Upload Video — Video Bank{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 1.5rem;">Upload Video</h1>
+
+{% if error %}
+<div class="error">{{ error }}</div>
+{% endif %}
+
+<form action="/api/videos" method="post" enctype="multipart/form-data">
+    <label for="name">Video Name</label>
+    <input type="text" id="name" name="name" required placeholder="My cool clip">
+
+    <label for="file">Video File</label>
+    <input type="file" id="file" name="file" accept="video/mp4,video/webm,video/quicktime" required>
+
+    <button type="submit" class="btn btn-primary">Upload</button>
+</form>
+
+<p style="margin-top: 1rem;"><a href="/" style="color: #4361ee;">&larr; Back to list</a></p>
+{% endblock %}

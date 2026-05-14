@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+uploads/videos/*
+uploads/thumbnails/*
+!uploads/videos/.gitkeep
+!uploads/thumbnails/.gitkeep
+data/*.db
+.env
