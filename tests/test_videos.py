@@ -318,3 +318,62 @@ class TestEdgeCases:
             data={"name": "No File"},
         )
         assert response.status_code == 422
+
+
+class TestAsyncUpload:
+    """Tests for XHR-based async upload (Checkpoint 1)."""
+
+    @pytest.mark.asyncio
+    async def test_upload_xhr_returns_json(self, client):
+        """POST /api/videos with X-Requested-With returns JSON."""
+        response = await client.post(
+            "/api/videos",
+            data={"name": "XHR Upload"},
+            files={"file": ("xhr.mp4", b"fake-video-content", "video/mp4")},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "id" in data
+        assert data["id"] == 1
+        assert "redirect" in data
+        assert data["redirect"] == "/"
+
+    @pytest.mark.asyncio
+    async def test_upload_xhr_bad_format(self, client):
+        """XHR upload with unsupported format returns JSON error."""
+        response = await client.post(
+            "/api/videos",
+            data={"name": "XHR Bad"},
+            files={"file": ("bad.avi", b"content", "video/x-msvideo")},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+        assert response.status_code == 400
+        data = response.json()
+        assert "error" in data
+        assert "unsupported" in data["error"].lower()
+
+    @pytest.mark.asyncio
+    async def test_upload_xhr_missing_name(self, client):
+        """XHR upload without name returns JSON error (422 from FastAPI)."""
+        response = await client.post(
+            "/api/videos",
+            data={"name": ""},
+            files={"file": ("no-name.mp4", b"content", "video/mp4")},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+        # FastAPI's Form(...) returns 422 before our handler runs
+        assert response.status_code == 422
+        data = response.json()
+        assert "detail" in data
+
+    @pytest.mark.asyncio
+    async def test_upload_form_still_redirects(self, client):
+        """Regular form upload still returns 303 redirect."""
+        response = await client.post(
+            "/api/videos",
+            data={"name": "Form Upload"},
+            files={"file": ("form.mp4", b"fake-content", "video/mp4")},
+        )
+        assert response.status_code == 303
+        assert response.headers["location"] == "/"

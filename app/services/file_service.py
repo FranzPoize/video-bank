@@ -19,7 +19,7 @@ THUMBNAILS_DIR = UPLOAD_DIR / "thumbnails"
 ALLOWED_EXTENSIONS = {
     e.strip() for e in os.environ.get("ALLOWED_EXTENSIONS", "mp4,webm,mov").split(",")
 }
-MAX_UPLOAD_SIZE = int(os.environ.get("MAX_UPLOAD_SIZE", str(500 * 1024 * 1024)))  # 500MB
+MAX_UPLOAD_SIZE = int(os.environ.get("MAX_UPLOAD_SIZE", str(2048 * 1024 * 1024)))  # 2GB
 THUMBNAIL_TIME_SECONDS = int(os.environ.get("THUMBNAIL_TIME", "1"))
 
 
@@ -74,7 +74,7 @@ async def delete_thumbnail(filename: str):
 
 async def generate_thumbnail(video_filename: str) -> bool:
     """Generate a thumbnail at the 1-second mark using ffmpeg.
-    
+
     Returns True if thumbnail was generated, False if ffmpeg is unavailable.
     """
     _ensure_dirs()
@@ -91,10 +91,14 @@ async def generate_thumbnail(video_filename: str) -> bool:
     proc = await asyncio.create_subprocess_exec(
         ffmpeg,
         "-y",
-        "-ss", str(THUMBNAIL_TIME_SECONDS),
-        "-i", str(video_path),
-        "-vframes", "1",
-        "-q:v", "2",
+        "-ss",
+        str(THUMBNAIL_TIME_SECONDS),
+        "-i",
+        str(video_path),
+        "-vframes",
+        "1",
+        "-q:v",
+        "2",
         str(thumb_path),
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.DEVNULL,

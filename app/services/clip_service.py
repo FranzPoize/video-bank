@@ -1,0 +1,175 @@
+"""
+Clip creation service: extract clips from existing videos using ffmpeg.
+
+Relies on ffmpeg/ffprobe being available on the system PATH
+(checked at app startup in main.py).
+"""
+
+import asyncio
+import math
+import shutil
+import uuid
+from pathlib import Path
+
+from app.services import file_service, tag_service, video_service
+
+# ── Helpers ──────────────────────────────────────────────────────
+
+async def _get_video_duration(video_path: Path) -> float | None:
+    """Return video duration in seconds via ffprobe, or None if unavailable."""
+    ffprobe = shutil.which("ffprobe")
+    if ffprobe is None:
+        return None
+
+    proc = await asyncio.create_subprocess_exec(
+        ffprobe,
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        str(video_path),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, _ = await proc.communicate()
+    if proc.returncode != 0:
+        return None
+
+    try:
+        return float(stdout.decode().strip())
+    except (ValueError, TypeError):
+        return None
+
+
+def _validate_times(start: float, end: float, duration: float | None):
+    """Validate clip time bounds. Raises ValueError with a user-facing message."""
+    if start < 0:
+        raise ValueError("Start time must be non-negative.")
+    if end <= start:
+        raise ValueError("Start must be before end.")
+    if (end - start) < 1.0:
+        raise ValueError("Minimum clip duration is 1 second.")
+    if duration is not None and end > duration:
+        raise ValueError(
+            f"End time ({end:.1f}s) exceeds video duration ({duration:.1f}s)."
+        )
+
+
+def _generate_clip_filename(source_filename: str, start: float, end: float) -> str:
+    """Generate a unique filename for the clip, e.g. clip_abc123_10_30.mp4."""
+    ext = Path(source_filename).suffix
+    stem = Path(source_filename).stem
+    # Use a short UUID to avoid filename length issues
+    short_id = uuid.uuid4().hex[:8]
+    # Round times to 1 decimal for readable filenames
+    start_str = f"{start:.1f}".replace(".", "_")
+    end_str = f"{end:.1f}".replace(".", "_")
+    return f"clip_{stem}_{start_str}_{end_str}_{short_id}{ext}"
+
+
+# ── Public API ───────────────────────────────────────────────────
+
+async def create_clip(
+    db,
+    source_video_id: int,
+    start_time: float,
+    end_time: float,
+) -> dict:
+    """Extract a clip from a source video and return the new video record.
+
+    Steps:
+    1. Fetch source video metadata from DB
+    2. Validate time bounds (start < end, >= 1s, within duration)
+    3. Generate unique clip filename
+    4. Run ffmpeg to cut the clip
+    5. Generate thumbnail from the clip's first frame
+    6. Create new video DB record with source_video_id, clip_start, clip_end
+    7. Copy source video tags to the clip
+    8. Return the new video dict
+    """
+    # 1. Fetch source video
+    source = await video_service.get_video(db, source_video_id)
+    if source is None:
+        raise ValueError(f"Source video with id {source_video_id} not found.")
+
+    source_path = file_service.get_video_path(source["filename"])
+
+    # 2. Validate times
+    duration = await _get_video_duration(source_path)
+    _validate_times(start_time, end_time, duration)
+
+    # 3. Generate clip filename
+    clip_duration = end_time - start_time
+    clip_filename = _generate_clip_filename(source["filename"], start_time, end_time)
+    clip_path = file_service.get_video_path(clip_filename)
+
+    # 4. Run ffmpeg
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        raise RuntimeError(
+            "ffmpeg not found. Install with: sudo apt install ffmpeg"
+        )
+
+    # NOTE: -c copy uses stream copy (fast but keyframe-aligned).
+    # For frame-accurate cuts, replace with re-encode:
+    #   "-c:v", "libx264", "-c:a", "aac",
+    #   "-avoid_negative_ts", "1"
+    proc = await asyncio.create_subprocess_exec(
+        ffmpeg,
+        "-y",
+        "-ss", f"{start_time:.3f}",
+        "-i", str(source_path),
+        "-t", f"{clip_duration:.3f}",
+        "-c", "copy",
+        str(clip_path),
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr = await proc.communicate()
+
+    if proc.returncode != 0:
+        error_msg = stderr.decode().strip() if stderr else "Unknown ffmpeg error"
+        # Clean up partial output on failure
+        if clip_path.exists():
+            clip_path.unlink()
+        raise RuntimeError(f"ffmpeg failed: {error_msg}")
+
+    if not clip_path.exists():
+        raise RuntimeError("ffmpeg completed but output file was not created.")
+
+    # 5. Generate thumbnail
+    await file_service.generate_thumbnail(clip_filename)
+
+    # 6. Create DB record and copy tags within a transaction
+    try:
+        cursor = await db.execute(
+            """INSERT INTO videos (name, filename, original_name, mime_type, file_size,
+                                   source_video_id, clip_start, clip_end)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                f"{source['name']} (clip)",
+                clip_filename,
+                clip_filename,
+                source["mime_type"],
+                clip_path.stat().st_size,
+                source_video_id,
+                start_time,
+                end_time,
+            ),
+        )
+        clip_id = cursor.lastrowid
+
+        # 7. Copy source video tags
+        source_tags = await tag_service.get_video_tags(db, source_video_id)
+        if source_tags:
+            await tag_service.set_video_tags(db, clip_id, source_tags)
+
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        # Clean up the created file on failure
+        if clip_path.exists():
+            clip_path.unlink()
+        raise
+
+    # 8. Return new video
+    return await video_service.get_video(db, clip_id)

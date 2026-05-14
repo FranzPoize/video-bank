@@ -54,6 +54,11 @@ MIGRATIONS = {
     1: [VIDEOS_SCHEMA],
     2: [],  # Reserved for future structural changes
     3: [TAGS_TABLE, VIDEO_TAGS_TABLE, IDX_VIDEO_TAGS_VIDEO, IDX_VIDEO_TAGS_TAG],
+    4: [
+        "ALTER TABLE videos ADD COLUMN source_video_id INTEGER REFERENCES videos(id)",
+        "ALTER TABLE videos ADD COLUMN clip_start REAL",
+        "ALTER TABLE videos ADD COLUMN clip_end REAL",
+    ],
 }
 
 
@@ -88,7 +93,14 @@ async def init_db(db_path: str | None = None, migration_version: int = 1):
     try:
         for version in range(1, migration_version + 1):
             for stmt in MIGRATIONS.get(version, []):
-                await db.execute(stmt)
+                try:
+                    await db.execute(stmt)
+                except Exception as e:
+                    # Ignore "duplicate column" errors from ALTER TABLE ADD COLUMN
+                    err_str = str(e)
+                    if "duplicate column name" in err_str:
+                        continue
+                    raise
         await db.commit()
     finally:
         await db.close()

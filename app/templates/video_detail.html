@@ -11,7 +11,10 @@
                 Uploaded {{ video.upload_date }} &middot; {{ "%.1f"|format(video.file_size / (1024*1024)) }} MB
             </p>
         </div>
-        <a href="/video/{{ video.id }}/edit" class="btn btn-primary btn-sm">Edit</a>
+        <div style="display: flex; gap: 0.5rem;">
+            <a href="/video/{{ video.id }}/clip" class="btn btn-primary btn-sm">Clip</a>
+            <a href="/video/{{ video.id }}/edit" class="btn btn-primary btn-sm">Edit</a>
+        </div>
     </div>
 
     <div style="background: #000; border-radius: 10px; overflow: hidden; margin-bottom: 1.5rem;">

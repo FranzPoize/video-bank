@@ -11,11 +11,11 @@ Endpoints added incrementally per checkpoint:
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.database import get_db
-from app.services import tag_service, video_service
+from app.services import clip_service, tag_service, video_service
 from app.services.file_service import get_video_path
 
 router = APIRouter()
@@ -83,12 +83,16 @@ async def create_video(
     tags: str = Form(""),  # Comma-separated tags
     db=Depends(get_db),
 ):
-    """Handle video upload. Redirects to list on success."""
+    """Handle video upload. Redirects to list on success.
+    
+    When `X-Requested-With: XMLHttpRequest` is present, returns JSON
+    instead of a redirect (for XHR uploads via upload.js).
+    """
     # Read file content
     content = await file.read()
 
     try:
-        await video_service.create_video(
+        video = await video_service.create_video(
             db,
             name=name,
             file_content=content,
@@ -98,11 +102,18 @@ async def create_video(
             tags=tags,
         )
     except ValueError as e:
+        # XHR requests get JSON errors too
+        if request.headers.get("x-requested-with") == "XMLHttpRequest":
+            return JSONResponse({"error": str(e)}, status_code=400)
         return templates.TemplateResponse(
             request, "upload.html",
             {"error": str(e)},
             status_code=400,
         )
+
+    # Return JSON for XHR uploads so JS can handle the response
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return JSONResponse({"id": video["id"], "redirect": "/"})
 
     return RedirectResponse(url="/", status_code=303)
 
@@ -194,3 +205,60 @@ async def delete_video(video_id: int, db=Depends(get_db)):
     if not deleted:
         raise HTTPException(status_code=404, detail="Video not found")
     return RedirectResponse(url="/", status_code=303)
+
+
+@router.get("/video/{video_id}/clip")
+async def clip_form(request: Request, video_id: int, db=Depends(get_db)):
+    """Show the clip creator interface for a video."""
+    video = await video_service.get_video_with_tags(db, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    enriched = _video_to_card(video)
+    enriched["video_url"] = f"/api/video/{video_id}/file"
+
+    return templates.TemplateResponse(
+        request, "clip.html",
+        {"video": enriched},
+    )
+
+
+@router.post("/api/video/{video_id}/clip")
+async def create_clip(
+    request: Request,
+    video_id: int,
+    db=Depends(get_db),
+):
+    """Create a clip from a source video. Accepts JSON body with start/end."""
+    # Parse JSON body
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body.")
+
+    start = body.get("start")
+    end = body.get("end")
+
+    if start is None or end is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Both 'start' and 'end' fields are required.",
+        )
+
+    try:
+        start = float(start)
+        end = float(end)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=400,
+            detail="'start' and 'end' must be numeric values.",
+        )
+
+    try:
+        clip = await clip_service.create_clip(db, video_id, start, end)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except RuntimeError as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+    return JSONResponse({"id": clip["id"], "redirect": f"/video/{clip['id']}"})

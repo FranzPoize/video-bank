@@ -33,6 +33,11 @@ uploads_dir.mkdir(parents=True, exist_ok=True)
 
 app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
+# Mount static files (JS, CSS) at /static
+static_dir = _project_root / "app" / "static"
+static_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
 # Include routers
 app.include_router(videos_router)
 app.include_router(tags_router)
@@ -64,9 +69,9 @@ async def not_found_handler(request, exc):
 @app.on_event("startup")
 async def on_startup():
     """Initialize database and verify environment on server start."""
-    await init_db(migration_version=3)
+    await init_db(migration_version=4)
 
-    # Check for ffmpeg (soft warning — degraded mode without it)
+    # Check for ffmpeg (required for clip creation in Checkpoint 2)
     # This is expanded in Checkpoint 2
     import shutil
     ffmpeg_path = shutil.which("ffmpeg")

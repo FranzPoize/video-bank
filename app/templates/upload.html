@@ -8,7 +8,7 @@
 <div class="error">{{ error }}</div>
 {% endif %}
 
-<form action="/api/videos" method="post" enctype="multipart/form-data">
+<form id="upload-form" action="/api/videos" method="post" enctype="multipart/form-data">
     <label for="name">Video Name</label>
     <input type="text" id="name" name="name" required placeholder="My cool clip">
 
