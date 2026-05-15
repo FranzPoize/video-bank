@@ -7,20 +7,14 @@ and includes all route modules.
 
 import logging
 import os
-import sys
 from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-# Ensure the project root is on sys.path for imports
-_project_root = Path(__file__).resolve().parent.parent
-if str(_project_root) not in sys.path:
-    sys.path.insert(0, str(_project_root))
-
 # ── Logging constants ──────────────────────────────────────────────
-LOG_DIR = os.environ.get("LOG_DIR", str(_project_root / "logs"))
+LOG_DIR = os.environ.get("LOG_DIR", str(Path(__file__).resolve().parent.parent / "logs"))
 LOG_FILE = os.path.join(LOG_DIR, "video-bank.log")
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -36,6 +30,8 @@ from app.templates import (
     parse_accept_language,
     DEFAULT_LANG,
 )
+
+_project_root = Path(__file__).resolve().parent.parent
 
 app = FastAPI(title="Video Bank")
 

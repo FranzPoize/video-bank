@@ -8,6 +8,7 @@ Relies on ffmpeg/ffprobe being available on the system PATH
 import asyncio
 import logging
 import math
+import aiosqlite
 import shutil
 import uuid
 from pathlib import Path
@@ -72,7 +73,7 @@ def _generate_clip_filename(source_filename: str, start: float, end: float) -> s
 # ── Public API ───────────────────────────────────────────────────
 
 async def create_clip(
-    db,
+    db: aiosqlite.Connection,
     source_video_id: int,
     start_time: float,
     end_time: float,

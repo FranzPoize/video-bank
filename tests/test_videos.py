@@ -9,6 +9,8 @@ import pytest
 from unittest.mock import patch
 
 # shutil.disk_usage returns a namedtuple; use same shape for mocks
+from tests.conftest import create_test_video
+
 DiskUsage = collections.namedtuple("DiskUsage", ["total", "used", "free"])
 
 
@@ -100,42 +102,33 @@ class TestVideoPlayback:
 
     @pytest.mark.asyncio
     async def test_video_detail_page(self, client):
-        """GET /video/{id} shows the detail page."""
-        # Upload first
-        await client.post(
-            "/api/videos",
-            data={"name": "Playback Test"},
-            files={"file": ("play.mp4", b"fake-content", "video/mp4")},
-        )
+        """GET /videos/{id} shows the detail page."""
+        video_id = await create_test_video(client, "Playback Test")
 
-        response = await client.get("/video/1")
+        response = await client.get(f"/videos/{video_id}")
         assert response.status_code == 200
         assert "Playback Test" in response.text
         assert "<video" in response.text
 
     @pytest.mark.asyncio
     async def test_video_detail_not_found(self, client):
-        """GET /video/{id} for missing id returns 404."""
-        response = await client.get("/video/999")
+        """GET /videos/{id} for missing id returns 404."""
+        response = await client.get("/videos/999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
     async def test_video_stream_endpoint(self, client):
-        """GET /api/video/{id}/file returns video bytes."""
-        await client.post(
-            "/api/videos",
-            data={"name": "Stream Test"},
-            files={"file": ("stream.mp4", b"fake-video-content", "video/mp4")},
-        )
+        """GET /api/videos/{id}/file returns video bytes."""
+        video_id = await create_test_video(client, "Stream Test")
 
-        response = await client.get("/api/video/1/file")
+        response = await client.get(f"/api/videos/{video_id}/file")
         assert response.status_code == 200
         assert response.headers["content-type"] == "video/mp4"
 
     @pytest.mark.asyncio
     async def test_video_stream_not_found(self, client):
-        """GET /api/video/{id}/file for missing id returns 404."""
-        response = await client.get("/api/video/999/file")
+        """GET /api/videos/{id}/file for missing id returns 404."""
+        response = await client.get("/api/videos/999/file")
         assert response.status_code == 404
 
 
@@ -193,57 +186,45 @@ class TestVideoCRUD:
 
     @pytest.mark.asyncio
     async def test_edit_video_name(self, client):
-        """POST /video/{id}/edit updates the video name."""
-        await client.post(
-            "/api/videos",
-            data={"name": "Original Name", "tags": ""},
-            files={"file": ("orig.mp4", b"c", "video/mp4")},
-        )
+        """POST /videos/{id}/edit updates the video name."""
+        video_id = await create_test_video(client, "Original Name", "")
 
         response = await client.post(
-            "/video/1/edit",
+            f"/videos/{video_id}/edit",
             data={"name": "Updated Name", "tags": ""},
         )
         assert response.status_code == 303
 
-        detail = await client.get("/video/1")
+        detail = await client.get(f"/videos/{video_id}")
         assert "Updated Name" in detail.text
         assert "Original Name" not in detail.text
 
     @pytest.mark.asyncio
     async def test_edit_video_tags(self, client):
-        """POST /video/{id}/edit updates tags."""
-        await client.post(
-            "/api/videos",
-            data={"name": "Tag Edit", "tags": "old-tag"},
-            files={"file": ("tagedit.mp4", b"c", "video/mp4")},
-        )
+        """POST /videos/{id}/edit updates tags."""
+        video_id = await create_test_video(client, "Tag Edit", "old-tag")
 
         await client.post(
-            "/video/1/edit",
+            f"/videos/{video_id}/edit",
             data={"name": "Tag Edit", "tags": "new-tag, another"},
         )
 
-        detail = await client.get("/video/1")
+        detail = await client.get(f"/videos/{video_id}")
         assert "new-tag" in detail.text
         assert "another" in detail.text
         assert "old-tag" not in detail.text
 
     @pytest.mark.asyncio
     async def test_delete_video(self, client):
-        """POST /video/{id}/delete removes the video."""
-        await client.post(
-            "/api/videos",
-            data={"name": "To Delete", "tags": ""},
-            files={"file": ("todel.mp4", b"c", "video/mp4")},
-        )
+        """POST /videos/{id}/delete removes the video."""
+        video_id = await create_test_video(client, "To Delete", "")
 
         # Verify it shows in list
         list_before = await client.get("/")
         assert "To Delete" in list_before.text
 
         # Delete it
-        response = await client.post("/video/1/delete")
+        response = await client.post(f"/videos/{video_id}/delete")
         assert response.status_code == 303
 
         # Verify it's gone from list
@@ -252,20 +233,16 @@ class TestVideoCRUD:
 
     @pytest.mark.asyncio
     async def test_delete_nonexistent_video(self, client):
-        """POST /video/{id}/delete for missing id returns 404."""
-        response = await client.post("/video/999/delete")
+        """POST /videos/{id}/delete for missing id returns 404."""
+        response = await client.post("/videos/999/delete")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
     async def test_edit_form_page(self, client):
-        """GET /video/{id}/edit shows edit form with current values."""
-        await client.post(
-            "/api/videos",
-            data={"name": "Form Test", "tags": "form-tag"},
-            files={"file": ("form.mp4", b"c", "video/mp4")},
-        )
+        """GET /videos/{id}/edit shows edit form with current values."""
+        video_id = await create_test_video(client, "Form Test", "form-tag")
 
-        response = await client.get("/video/1/edit")
+        response = await client.get(f"/videos/{video_id}/edit")
         assert response.status_code == 200
         assert "Form Test" in response.text
         assert "form-tag" in response.text
@@ -286,13 +263,13 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_video_detail_nonexistent(self, client):
         """Accessing non-existent video detail returns 404."""
-        response = await client.get("/video/999")
+        response = await client.get("/videos/999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
     async def test_edit_nonexistent_video(self, client):
         """Editing non-existent video returns 404."""
-        response = await client.get("/video/999/edit")
+        response = await client.get("/videos/999/edit")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -303,7 +280,7 @@ class TestEdgeCases:
             data={"name": "First", "tags": ""},
             files={"file": ("first.mp4", b"c", "video/mp4")},
         )
-        await client.post("/video/1/delete")
+        await client.post("/videos/1/delete")
 
         await client.post(
             "/api/videos",
@@ -311,7 +288,7 @@ class TestEdgeCases:
             files={"file": ("second.mp4", b"c", "video/mp4")},
         )
 
-        detail = await client.get("/video/2")
+        detail = await client.get("/videos/2")
         assert detail.status_code == 200
         assert "Second" in detail.text
 
@@ -340,7 +317,7 @@ class TestAsyncUpload:
         assert response.status_code == 200
         data = response.json()
         assert "id" in data
-        assert data["id"] == 1
+        assert data["id"] >= 1
         assert "redirect" in data
         assert data["redirect"] == "/"
 

@@ -3,7 +3,7 @@
 
 {% block content %}
 <div style="max-width: 600px; margin: 0 auto;">
-    <a href="/video/{{ video.id }}" style="color: #4361ee; text-decoration: none; display: inline-block; margin-bottom: 1rem;">{{ _("link.back_to_video") }}</a>
+    <a href="/videos/{{ video.id }}" style="color: #4361ee; text-decoration: none; display: inline-block; margin-bottom: 1rem;">{{ _("link.back_to_video") }}</a>
 
     <h1 style="margin-bottom: 1.5rem;">{{ _("page.edit_video") }}</h1>
 
@@ -11,7 +11,7 @@
     <div class="error">{{ error }}</div>
     {% endif %}
 
-    <form action="/video/{{ video.id }}/edit" method="post" style="background: #fff; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+    <form action="/videos/{{ video.id }}/edit" method="post" style="background: #fff; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
         <label for="name">{{ _("form.video_name") }}</label>
         <input type="text" id="name" name="name" required value="{{ video.name }}">
 
@@ -24,7 +24,7 @@
 
         <div style="display: flex; gap: 0.5rem;">
             <button type="submit" class="btn btn-primary">{{ _("btn.save_changes") }}</button>
-            <a href="/video/{{ video.id }}" class="btn" style="background: #e0e0e0; color: #333;">{{ _("btn.cancel") }}</a>
+            <a href="/videos/{{ video.id }}" class="btn" style="background: #e0e0e0; color: #333;">{{ _("btn.cancel") }}</a>
         </div>
     </form>
 
@@ -35,7 +35,7 @@
         <p style="font-size: 0.9rem; color: #888; margin-bottom: 1rem;">
             {{ _("edit.danger_desc") }}
         </p>
-        <form action="/video/{{ video.id }}/delete" method="post" onsubmit="return confirm('{{ _("edit.confirm_delete") }} {{ video.name }}?');">
+        <form action="/videos/{{ video.id }}/delete" method="post" onsubmit="return confirm('{{ _("edit.confirm_delete") }} {{ video.name }}?');">
             <button type="submit" class="btn btn-danger">{{ _("btn.delete_video") }}</button>
         </form>
     </div>

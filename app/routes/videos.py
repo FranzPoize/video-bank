@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from app.database import get_db
 from app.services import clip_service, tag_service, video_service
 from app.services.file_service import get_available_space, get_video_path
-from app.templates import templates, DEFAULT_LANG, LANG_FLAGS, get_i18n_context
+from app.templates import templates, DEFAULT_LANG, LANG_FLAGS, get_i18n, get_i18n_context
 
 router = APIRouter()
 
@@ -41,14 +41,6 @@ def _video_to_card(video: dict) -> dict:
     }
 
 
-def _get_i18n(request: Request) -> dict:
-    """Get i18n context from request.state, with fallback.
-
-    Middleware sets request.state.i18n, but in tests it may not exist.
-    """
-    return getattr(request.state, "i18n", get_i18n_context(DEFAULT_LANG))
-
-
 @router.get("/api/space")
 async def space_indicator(request: Request):
     """Return an HTML fragment showing available disk space in the uploads directory.
@@ -56,7 +48,7 @@ async def space_indicator(request: Request):
     This is consumed by the nav bar's hx-get in base.html. Never blocks
     an upload — returns a gray "Space: unknown" on error.
     """
-    i18n = _get_i18n(request)
+    i18n = get_i18n(request)
     space = get_available_space()
     return templates.TemplateResponse(
         request, "_space_fragment.html",
@@ -118,7 +110,7 @@ async def list_videos(
     db=Depends(get_db),
 ):
     """Show all videos, optionally filtered by tag_id. HTMX requests get just the grid fragment."""
-    i18n = _get_i18n(request)
+    i18n = get_i18n(request)
     if tag_id is not None:
         videos = await video_service.list_videos_by_tag(db, tag_id)
     else:
@@ -144,7 +136,7 @@ async def list_videos(
 @router.get("/upload")
 async def upload_form(request: Request):
     """Show the upload form."""
-    i18n = _get_i18n(request)
+    i18n = get_i18n(request)
     return templates.TemplateResponse(
         request, "upload.html",
         {**i18n},
@@ -164,7 +156,7 @@ async def create_video(
     When `X-Requested-With: XMLHttpRequest` is present, returns JSON
     instead of a redirect (for XHR uploads via upload.js).
     """
-    i18n = _get_i18n(request)
+    i18n = get_i18n(request)
     # Read file content
     content = await file.read()
 
@@ -198,7 +190,7 @@ async def create_video(
     return RedirectResponse(url="/", status_code=303)
 
 
-@router.get("/api/video/{video_id}/file")
+@router.get("/api/videos/{video_id}/file")
 async def stream_video(video_id: int, db=Depends(get_db)):
     """Stream a video file with range request support for seeking."""
     video = await video_service.get_video(db, video_id)
@@ -216,24 +208,16 @@ async def stream_video(video_id: int, db=Depends(get_db)):
     )
 
 
-@router.get("/video/{video_id}")
+@router.get("/videos/{video_id}")
 async def video_detail(request: Request, video_id: int, db=Depends(get_db)):
     """Show video detail page with player and tags."""
-    i18n = _get_i18n(request)
+    i18n = get_i18n(request)
     video = await video_service.get_video_with_tags(db, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
 
     enriched = _video_to_card(video)
-    thumb_stem = Path(video["filename"]).stem
-    enriched["video_url"] = f"/api/video/{video_id}/file"
-    enriched["thumbnail_url"] = f"/uploads/thumbnails/{thumb_stem}.jpg"
-    enriched["has_thumbnail"] = (
-        Path(__file__).resolve().parent.parent.parent
-        / "uploads"
-        / "thumbnails"
-        / f"{thumb_stem}.jpg"
-    ).exists()
+    enriched["video_url"] = f"/api/videos/{video_id}/file"
 
     return templates.TemplateResponse(
         request, "video_detail.html",
@@ -244,10 +228,10 @@ async def video_detail(request: Request, video_id: int, db=Depends(get_db)):
     )
 
 
-@router.get("/video/{video_id}/edit")
+@router.get("/videos/{video_id}/edit")
 async def edit_video_form(request: Request, video_id: int, db=Depends(get_db)):
     """Show the edit form for a video."""
-    i18n = _get_i18n(request)
+    i18n = get_i18n(request)
     video = await video_service.get_video_with_tags(db, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
@@ -262,7 +246,7 @@ async def edit_video_form(request: Request, video_id: int, db=Depends(get_db)):
     )
 
 
-@router.post("/video/{video_id}/edit")
+@router.post("/videos/{video_id}/edit")
 async def update_video(
     request: Request,
     video_id: int,
@@ -281,10 +265,10 @@ async def update_video(
     tag_names = [t.strip() for t in tags.split(",") if t.strip()]
     await tag_service.set_video_tags(db, video_id, tag_names)
 
-    return RedirectResponse(url=f"/video/{video_id}", status_code=303)
+    return RedirectResponse(url=f"/videos/{video_id}", status_code=303)
 
 
-@router.post("/video/{video_id}/delete")
+@router.post("/videos/{video_id}/delete")
 async def delete_video(video_id: int, db=Depends(get_db)):
     """Delete a video and its files."""
     deleted = await video_service.delete_video(db, video_id)
@@ -293,16 +277,16 @@ async def delete_video(video_id: int, db=Depends(get_db)):
     return RedirectResponse(url="/", status_code=303)
 
 
-@router.get("/video/{video_id}/clip")
+@router.get("/videos/{video_id}/clip")
 async def clip_form(request: Request, video_id: int, db=Depends(get_db)):
     """Show the clip creator interface for a video."""
-    i18n = _get_i18n(request)
+    i18n = get_i18n(request)
     video = await video_service.get_video_with_tags(db, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
 
     enriched = _video_to_card(video)
-    enriched["video_url"] = f"/api/video/{video_id}/file"
+    enriched["video_url"] = f"/api/videos/{video_id}/file"
 
     return templates.TemplateResponse(
         request, "clip.html",
@@ -313,7 +297,7 @@ async def clip_form(request: Request, video_id: int, db=Depends(get_db)):
     )
 
 
-@router.post("/api/video/{video_id}/clip")
+@router.post("/api/videos/{video_id}/clip")
 async def create_clip(
     request: Request,
     video_id: int,
@@ -344,6 +328,11 @@ async def create_clip(
             detail="'start' and 'end' must be numeric values.",
         )
 
+    # Check source video exists (returns 404 instead of 400)
+    source = await video_service.get_video(db, video_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Source video not found")
+
     try:
         clip = await clip_service.create_clip(db, video_id, start, end)
     except ValueError as e:
@@ -351,4 +340,4 @@ async def create_clip(
     except RuntimeError as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
-    return JSONResponse({"id": clip["id"], "redirect": f"/video/{clip['id']}"})
+    return JSONResponse({"id": clip["id"], "redirect": f"/videos/{clip['id']}"})

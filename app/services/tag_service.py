@@ -2,8 +2,10 @@
 Tag management: create, list, associate with videos.
 """
 
+import aiosqlite
 
-async def get_or_create_tag(db, name: str) -> int:
+
+async def get_or_create_tag(db: aiosqlite.Connection, name: str) -> int:
     """Find a tag by name or create it. Returns the tag id."""
     name = name.strip().lower()
     if not name:
@@ -19,14 +21,14 @@ async def get_or_create_tag(db, name: str) -> int:
     return cursor.lastrowid
 
 
-async def list_all_tags(db) -> list[dict]:
+async def list_all_tags(db: aiosqlite.Connection) -> list[dict]:
     """Return all tags, ordered by name."""
     cursor = await db.execute("SELECT * FROM tags ORDER BY name ASC")
     rows = await cursor.fetchall()
     return [dict(r) for r in rows]
 
 
-async def get_video_tags(db, video_id: int) -> list[str]:
+async def get_video_tags(db: aiosqlite.Connection, video_id: int) -> list[str]:
     """Return tag names for a given video."""
     cursor = await db.execute(
         """SELECT t.name FROM tags t
@@ -39,7 +41,7 @@ async def get_video_tags(db, video_id: int) -> list[str]:
     return [r["name"] for r in rows]
 
 
-async def set_video_tags(db, video_id: int, tag_names: list[str]):
+async def set_video_tags(db: aiosqlite.Connection, video_id: int, tag_names: list[str]):
     """Replace all tags on a video with the given list.
 
     Tags that don't exist yet are created on the fly.
@@ -61,14 +63,14 @@ async def set_video_tags(db, video_id: int, tag_names: list[str]):
     await db.commit()
 
 
-async def get_tag(db, tag_id: int) -> dict | None:
+async def get_tag(db: aiosqlite.Connection, tag_id: int) -> dict | None:
     """Fetch a single tag by id. Returns None if not found."""
     cursor = await db.execute("SELECT id, name FROM tags WHERE id = ?", (tag_id,))
     row = await cursor.fetchone()
     return dict(row) if row else None
 
 
-async def update_tag(db, tag_id: int, new_name: str) -> dict:
+async def update_tag(db: aiosqlite.Connection, tag_id: int, new_name: str) -> dict:
     """Rename a tag. Returns updated tag dict or raises ValueError on duplicate/empty."""
     new_name = new_name.strip().lower()
     if not new_name:
@@ -91,7 +93,7 @@ async def update_tag(db, tag_id: int, new_name: str) -> dict:
     return updated
 
 
-async def delete_tag(db, tag_id: int) -> bool:
+async def delete_tag(db: aiosqlite.Connection, tag_id: int) -> bool:
     """Delete a tag. Returns True if deleted, False if not found.
 
     ON DELETE CASCADE in schema handles video_tags cleanup automatically.
@@ -101,7 +103,7 @@ async def delete_tag(db, tag_id: int) -> bool:
     return cursor.rowcount > 0
 
 
-async def list_all_tags_with_counts(db) -> list[dict]:
+async def list_all_tags_with_counts(db: aiosqlite.Connection) -> list[dict]:
     """List all tags with video usage counts. Ordered by name."""
     cursor = await db.execute("""
         SELECT t.id, t.name, COUNT(vt.video_id) as video_count

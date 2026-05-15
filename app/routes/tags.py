@@ -10,17 +10,9 @@ from fastapi.responses import RedirectResponse
 
 from app.database import get_db
 from app.services import tag_service
-from app.templates import templates, DEFAULT_LANG, get_i18n_context
+from app.templates import templates, DEFAULT_LANG, get_i18n, get_i18n_context
 
 router = APIRouter()
-
-
-def _get_i18n(request: Request) -> dict:
-    """Get i18n context from request.state, with fallback.
-
-    Middleware sets request.state.i18n, but in tests it may not exist.
-    """
-    return getattr(request.state, "i18n", get_i18n_context(DEFAULT_LANG))
 
 
 @router.get("/api/tags")
@@ -33,7 +25,7 @@ async def list_tags(db=Depends(get_db)):
 @router.get("/settings")
 async def settings_page(request: Request, db=Depends(get_db)):
     """Settings page with tag management."""
-    i18n = _get_i18n(request)
+    i18n = get_i18n(request)
     tags = await tag_service.list_all_tags_with_counts(db)
 
     # Get error query param for rename errors

@@ -190,7 +190,7 @@ class TestVideoServiceLogging:
             files={"file": ("todel.mp4", b"c", "video/mp4")},
         )
 
-        response = await client.post("/video/1/delete")
+        response = await client.post("/videos/1/delete")
         assert response.status_code == 303
 
         delete_logs = [r for r in caplog.records if "Video deleted" in r.getMessage()]

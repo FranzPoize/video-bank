@@ -5,6 +5,7 @@ Run with: pytest tests/test_tags.py -v
 """
 
 import pytest
+from tests.conftest import create_test_video
 
 
 class TestTagCreation:
@@ -75,12 +76,8 @@ class TestTagDisplay:
     @pytest.mark.asyncio
     async def test_tags_in_detail(self, client):
         """Tags should appear on the video detail page."""
-        await client.post(
-            "/api/videos",
-            data={"name": "Detail Tags", "tags": "gamma, delta"},
-            files={"file": ("detail.mp4", b"c", "video/mp4")},
-        )
-        response = await client.get("/video/1")
+        video_id = await create_test_video(client, "Detail Tags", "gamma, delta")
+        response = await client.get(f"/videos/{video_id}")
         assert "gamma" in response.text
         assert "delta" in response.text
 

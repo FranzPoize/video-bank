@@ -113,7 +113,7 @@
     errorDisplay.textContent = "";
 
     try {
-      const response = await fetch("/api/video/" + videoId + "/clip", {
+      const response = await fetch("/api/videos/" + videoId + "/clip", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -132,7 +132,7 @@
       }
 
       // Success — redirect to new clip's detail page
-      window.location.href = "/video/" + data.id;
+      window.location.href = "/videos/" + data.id;
     } catch (err) {
       errorDisplay.textContent = _("clip.network_error");
       btn.disabled = false;

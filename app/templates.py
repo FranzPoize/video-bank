@@ -10,6 +10,7 @@ Provides translation loading and helper functions for templates.
 """
 
 import json
+from fastapi import Request
 from pathlib import Path
 
 from fastapi.templating import Jinja2Templates
@@ -134,6 +135,14 @@ def get_i18n_context(lang: str) -> dict:
         "current_lang": lang,
         "current_flag": get_flag(lang),
     }
+
+
+def get_i18n(request: Request) -> dict:
+    """Get i18n context from request.state, with fallback.
+
+    Middleware sets request.state.i18n, but in tests it may not exist.
+    """
+    return getattr(request.state, "i18n", get_i18n_context(DEFAULT_LANG))
 
 
 def parse_accept_language(header: str | None) -> str | None:

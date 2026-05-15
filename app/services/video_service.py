@@ -6,15 +6,15 @@ This keeps them testable with in-memory databases.
 """
 
 import logging
+import aiosqlite
 
-from app.database import get_db
 from app.services import file_service, tag_service
 
 logger = logging.getLogger(__name__)
 
 
 async def create_video(
-    db,
+    db: aiosqlite.Connection,
     name: str,
     file_content: bytes,
     original_name: str,
@@ -56,7 +56,7 @@ async def create_video(
     return await get_video(db, video_id)
 
 
-async def get_video(db, video_id: int) -> dict | None:
+async def get_video(db: aiosqlite.Connection, video_id: int) -> dict | None:
     """Fetch a single video by ID. Returns None if not found."""
     cursor = await db.execute("SELECT * FROM videos WHERE id = ?", (video_id,))
     row = await cursor.fetchone()
@@ -65,7 +65,7 @@ async def get_video(db, video_id: int) -> dict | None:
     return dict(row)
 
 
-async def list_videos(db) -> list[dict]:
+async def list_videos(db: aiosqlite.Connection) -> list[dict]:
     """Return all videos ordered by upload date (newest first)."""
     cursor = await db.execute(
         "SELECT * FROM videos ORDER BY upload_date DESC"
@@ -74,7 +74,7 @@ async def list_videos(db) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-async def update_video(db, video_id: int, name: str) -> dict | None:
+async def update_video(db: aiosqlite.Connection, video_id: int, name: str) -> dict | None:
     """Update a video's name. Returns updated video or None."""
     await db.execute(
         "UPDATE videos SET name = ? WHERE id = ?",
@@ -84,7 +84,7 @@ async def update_video(db, video_id: int, name: str) -> dict | None:
     return await get_video(db, video_id)
 
 
-async def delete_video(db, video_id: int) -> bool:
+async def delete_video(db: aiosqlite.Connection, video_id: int) -> bool:
     """Delete a video record and its files. Returns True if deleted."""
     video = await get_video(db, video_id)
     if video is None:
@@ -101,7 +101,7 @@ async def delete_video(db, video_id: int) -> bool:
     return True
 
 
-async def get_video_with_tags(db, video_id: int) -> dict | None:
+async def get_video_with_tags(db: aiosqlite.Connection, video_id: int) -> dict | None:
     """Fetch a video along with its tags."""
     video = await get_video(db, video_id)
     if video is None:
@@ -110,7 +110,7 @@ async def get_video_with_tags(db, video_id: int) -> dict | None:
     return video
 
 
-async def list_videos_with_tags(db) -> list[dict]:
+async def list_videos_with_tags(db: aiosqlite.Connection) -> list[dict]:
     """Return all videos with their tags."""
     videos = await list_videos(db)
     for v in videos:
@@ -118,7 +118,7 @@ async def list_videos_with_tags(db) -> list[dict]:
     return videos
 
 
-async def list_videos_by_tag(db, tag_id: int) -> list[dict]:
+async def list_videos_by_tag(db: aiosqlite.Connection, tag_id: int) -> list[dict]:
     """Return videos that have a specific tag."""
     cursor = await db.execute(
         """SELECT v.* FROM videos v

@@ -9,20 +9,15 @@ Provides:
 
 import asyncio
 import os
-import sys
-from pathlib import Path
 from typing import AsyncGenerator
+from contextlib import contextmanager
+from unittest.mock import AsyncMock, patch
 
 import aiosqlite
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-
-# Ensure project root is on sys.path
-_project_root = Path(__file__).resolve().parent.parent
-if str(_project_root) not in sys.path:
-    sys.path.insert(0, str(_project_root))
 
 from app.database import init_db, get_db
 from app.main import app as _app
@@ -58,3 +53,84 @@ async def client(db) -> AsyncGenerator[AsyncClient, None]:
         yield ac
 
     _app.dependency_overrides.clear()
+
+
+@contextmanager
+def mock_ffmpeg(source_filename="src.mp4", duration=60.0, returncode=0):
+    """Context manager that mocks ffmpeg/ffprobe for clip tests.
+
+    Sets up:
+    - shutil.which returning paths for ffprobe and ffmpeg
+    - create_subprocess_exec returning mocked processes
+    - file_service.get_video_path returning appropriate paths
+    - file_service.generate_thumbnail as a no-op
+
+    Args:
+        source_filename: The filename that triggers "source" path matching.
+        duration: Duration in seconds that ffprobe returns.
+        returncode: Return code for the ffmpeg subprocess (0 = success).
+
+    Yields:
+        Tuple of (mock_which, mock_subproc) for additional assertions.
+    """
+    with patch("app.services.clip_service.shutil.which") as mock_which, \
+         patch("app.services.clip_service.asyncio.create_subprocess_exec") as mock_subproc:
+
+        mock_which.side_effect = lambda cmd: {
+            "ffprobe": "/usr/bin/ffprobe",
+            "ffmpeg": "/usr/bin/ffmpeg",
+        }.get(cmd)
+
+        # Mock ffprobe subprocess
+        mock_ffprobe_proc = AsyncMock()
+        mock_ffprobe_proc.returncode = 0
+        mock_ffprobe_proc.communicate = AsyncMock(
+            return_value=(f"{duration}\n".encode(), b"")
+        )
+
+        # Mock ffmpeg subprocess
+        mock_ffmpeg_proc = AsyncMock()
+        mock_ffmpeg_proc.returncode = returncode
+        mock_ffmpeg_proc.communicate = AsyncMock(return_value=(b"", b"ffmpeg error output" if returncode != 0 else b""))
+
+        mock_subproc.side_effect = [mock_ffprobe_proc, mock_ffmpeg_proc]
+
+        # Mock file paths
+        with patch("app.services.clip_service.file_service.get_video_path") as mock_get_path, \
+             patch("app.services.clip_service.file_service.generate_thumbnail", AsyncMock(return_value=True)):
+
+            def _make_stat(size=1024):
+                return type("Stat", (), {"st_size": size})()
+
+            def _make_path(exists=True):
+                return type("Path", (), {
+                    "exists": lambda self: exists,
+                    "stat": lambda self: _make_stat(),
+                    "unlink": lambda self: None,
+                })()
+
+            mock_src_path = _make_path(True)
+            mock_clip_path = _make_path(returncode == 0)
+
+            def get_path_side_effect(filename):
+                if source_filename in filename:
+                    return mock_src_path
+                return mock_clip_path
+
+            mock_get_path.side_effect = get_path_side_effect
+
+            yield (mock_which, mock_subproc)
+
+
+async def create_test_video(client, name: str, tags: str = "") -> int:
+    """Upload a test video and return its numeric ID.
+
+    Uses X-Requested-With header to get JSON response with the ID.
+    """
+    response = await client.post(
+        "/api/videos",
+        data={"name": name, "tags": tags},
+        files={"file": (f"{name}.mp4", b"fake-video-content", "video/mp4")},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    return response.json()["id"]
