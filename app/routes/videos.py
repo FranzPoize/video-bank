@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from app.database import get_db
 from app.services import clip_service, tag_service, video_service
 from app.services.file_service import get_available_space, get_video_path
-from app.templates import templates, DEFAULT_LANG, LANG_FLAGS
+from app.templates import templates, DEFAULT_LANG, LANG_FLAGS, get_i18n_context
 
 router = APIRouter()
 
@@ -46,7 +46,7 @@ def _get_i18n(request: Request) -> dict:
 
     Middleware sets request.state.i18n, but in tests it may not exist.
     """
-    return getattr(request.state, "i18n", DEFAULT_LANG)
+    return getattr(request.state, "i18n", get_i18n_context(DEFAULT_LANG))
 
 
 @router.get("/api/space")
