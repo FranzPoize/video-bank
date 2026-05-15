@@ -6,6 +6,7 @@ call is added in Checkpoint 2.
 """
 
 import asyncio
+import logging
 import os
 import shutil
 import uuid
@@ -22,6 +23,8 @@ ALLOWED_EXTENSIONS = {
 MAX_UPLOAD_SIZE = int(os.environ.get("MAX_UPLOAD_SIZE", str(2048 * 1024 * 1024)))  # 2GB
 THUMBNAIL_TIME_SECONDS = int(os.environ.get("THUMBNAIL_TIME", "1"))
 
+logger = logging.getLogger(__name__)
+
 
 def _ensure_dirs():
     VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
@@ -34,8 +37,8 @@ def get_available_space(directory: Path | None = None) -> dict:
     Defaults to VIDEOS_DIR. Returns total, used, free (bytes),
     percent_used (0.0–1.0), and free_gb (human-readable, 1 decimal).
 
-    On OSError (e.g. permission denied, missing dir), returns
-    {"error": True} so callers can degrade gracefully.
+    On OSError (e.g. permission denied, missing dir), logs a warning
+    and returns {"error": True} so callers can degrade gracefully.
     """
     try:
         usage = shutil.disk_usage(directory or VIDEOS_DIR)
@@ -44,9 +47,10 @@ def get_available_space(directory: Path | None = None) -> dict:
             "used": usage.used,
             "free": usage.free,
             "percent_used": usage.used / usage.total,
-            "free_gb": round(usage.free / (1024 ** 3), 1),
+            "free_gb": round(usage.free / (1024**3), 1),
         }
-    except OSError:
+    except OSError as e:
+        logger.warning("Failed to get disk usage: %s", e)
         return {"error": True}
 
 
@@ -73,6 +77,12 @@ def validate_file(filename: str, file_size: int) -> str | None:
         projected = (space["used"] + file_size) / space["total"]
         if projected > 0.95:
             return "Not enough disk space (would exceed 95% capacity)."
+        if projected > 0.80:
+            logger.warning(
+                "Disk near capacity: %.1f%% used (projected: %.1f%%)",
+                space["percent_used"] * 100,
+                projected * 100,
+            )
 
     return None
 
@@ -85,6 +95,7 @@ async def save_upload(file_content: bytes, original_name: str) -> str:
     dest = VIDEOS_DIR / stored_name
     with open(dest, "wb") as f:
         f.write(file_content)
+    logger.info("File saved: %s (%d bytes)", stored_name, len(file_content))
     return stored_name
 
 
@@ -109,7 +120,7 @@ async def generate_thumbnail(video_filename: str) -> bool:
     """
     _ensure_dirs()
     video_path = VIDEOS_DIR / video_filename
-    thumb_path = THUMBNAILS_DIR / f"{Path(video_filename).stem}.jpg"
+    thumb_path = THUMBNAILS_DIR / f"{Path(video_filename).stem}.webp"
 
     if thumb_path.exists():
         return True  # Already generated
@@ -134,7 +145,16 @@ async def generate_thumbnail(video_filename: str) -> bool:
         stderr=asyncio.subprocess.DEVNULL,
     )
     return_code = await proc.wait()
-    return return_code == 0 and thumb_path.exists()
+    if return_code == 0 and thumb_path.exists():
+        logger.info("Thumbnail generated: %s", thumb_path.name)
+        return True
+    else:
+        logger.error(
+            "Thumbnail generation failed for %s (ffmpeg returned %d)",
+            video_filename,
+            return_code,
+        )
+        return False
 
 
 def get_video_path(filename: str) -> Path:

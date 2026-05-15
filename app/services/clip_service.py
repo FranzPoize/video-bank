@@ -6,12 +6,15 @@ Relies on ffmpeg/ffprobe being available on the system PATH
 """
 
 import asyncio
+import logging
 import math
 import shutil
 import uuid
 from pathlib import Path
 
 from app.services import file_service, tag_service, video_service
+
+logger = logging.getLogger(__name__)
 
 # ── Helpers ──────────────────────────────────────────────────────
 
@@ -131,6 +134,10 @@ async def create_clip(
         # Clean up partial output on failure
         if clip_path.exists():
             clip_path.unlink()
+        logger.error(
+            "ffmpeg failed for clip from video %d: %s",
+            source_video_id, error_msg,
+        )
         raise RuntimeError(f"ffmpeg failed: {error_msg}")
 
     if not clip_path.exists():
@@ -172,4 +179,8 @@ async def create_clip(
         raise
 
     # 8. Return new video
+    logger.info(
+        "Clip created: id=%d from video=%d [%.1fs-%.1fs]",
+        clip_id, source_video_id, start_time, end_time,
+    )
     return await video_service.get_video(db, clip_id)

@@ -5,6 +5,7 @@ Creates the app, mounts static directories, initializes the database,
 and includes all route modules.
 """
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -18,6 +19,14 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 _project_root = Path(__file__).resolve().parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
+
+# ── Logging constants ──────────────────────────────────────────────
+LOG_DIR = os.environ.get("LOG_DIR", str(_project_root / "logs"))
+LOG_FILE = os.path.join(LOG_DIR, "video-bank.log")
+LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
+# ───────────────────────────────────────────────────────────────────
 
 from app.database import init_db
 from app.routes.videos import router as videos_router
@@ -68,18 +77,38 @@ async def not_found_handler(request, exc):
 
 @app.on_event("startup")
 async def on_startup():
-    """Initialize database and verify environment on server start."""
+    """Initialize database, configure logging, and verify environment."""
+
+    # ── Configure file-based logging (skip in test environment) ──
+    if "PYTEST_CURRENT_TEST" not in os.environ:
+        os.makedirs(LOG_DIR, exist_ok=True)
+        logging.basicConfig(
+            filename=LOG_FILE,
+            format=LOG_FORMAT,
+            datefmt=LOG_DATE_FORMAT,
+            level=getattr(logging, LOG_LEVEL.upper(), logging.INFO),
+            force=True,
+        )
+    # ─────────────────────────────────────────────────────────────
+
     await init_db(migration_version=4)
 
-    # Check for ffmpeg (required for clip creation in Checkpoint 2)
-    # This is expanded in Checkpoint 2
+    # Check for ffmpeg (required for clip creation)
     import shutil
     ffmpeg_path = shutil.which("ffmpeg")
     if ffmpeg_path is None:
-        print(
-            "WARNING: ffmpeg not found. Install with: sudo apt install ffmpeg. "
+        logging.warning(
+            "ffmpeg not found. Install with: sudo apt install ffmpeg. "
             "Thumbnails will not be generated."
         )
+    else:
+        logging.info("ffmpeg found at %s", ffmpeg_path)
+
+    db_path = os.environ.get("DATABASE_PATH", str(_project_root / "data" / "video_bank.db"))
+    logging.info(
+        "Video Bank started. DB path: %s, LOG_DIR: %s",
+        db_path, LOG_DIR,
+    )
 
 
 @app.get("/health")

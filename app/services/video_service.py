@@ -5,8 +5,12 @@ Each function takes an aiosqlite.Connection as the first argument.
 This keeps them testable with in-memory databases.
 """
 
+import logging
+
 from app.database import get_db
 from app.services import file_service, tag_service
+
+logger = logging.getLogger(__name__)
 
 
 async def create_video(
@@ -19,12 +23,13 @@ async def create_video(
     tags: str = "",  # Comma-separated tag string
 ) -> dict:
     """Save a video file and create a database record.
-    
+
     Returns the created video as a dict.
     """
     # Validate file before saving
     error = file_service.validate_file(original_name, file_size)
     if error:
+        logger.warning("Upload rejected (%s): %s", original_name, error)
         raise ValueError(error)
 
     # Save file to disk
@@ -92,6 +97,7 @@ async def delete_video(db, video_id: int) -> bool:
     # Remove database record
     await db.execute("DELETE FROM videos WHERE id = ?", (video_id,))
     await db.commit()
+    logger.info("Video deleted: id=%d, filename=%s", video_id, video["filename"])
     return True
 
 
