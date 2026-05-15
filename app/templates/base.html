@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ current_lang }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Video Bank{% endblock %}</title>
+    <title>{% block title %}{{ _("nav.video_bank") }}{% endblock %}</title>
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -105,19 +105,132 @@
         .space-ok { color: #2d6a4f; background: #d8f3dc; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; white-space: nowrap; }
         .space-warn { color: #936639; background: #fff3cd; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; white-space: nowrap; }
         .space-critical { color: #e63946; background: #ffe5e7; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; white-space: nowrap; }
+
+        /* Language dropdown */
+        .lang-dropdown {
+            position: relative;
+            margin-left: 0.5rem;
+        }
+        .lang-btn {
+            background: transparent;
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 4px;
+            padding: 0.3rem 0.6rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.85rem;
+        }
+        .lang-btn:hover {
+            background: rgba(255,255,255,0.1);
+        }
+        .lang-arrow {
+            font-size: 0.6rem;
+            opacity: 0.7;
+        }
+        .lang-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 0.25rem;
+            background: #1a1a2e;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 4px;
+            min-width: 140px;
+            z-index: 100;
+            display: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .lang-menu.open {
+            display: block;
+        }
+        .lang-menu a {
+            display: block;
+            padding: 0.5rem 0.75rem;
+            color: #fff;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .lang-menu a:hover {
+            background: rgba(255,255,255,0.1);
+            text-decoration: none;
+        }
+        .lang-flag {
+            margin-right: 0.4rem;
+        }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
 <body>
     <nav>
-        <a href="/">Video Bank</a>
-        <a href="/upload">Upload</a>
+        <a href="/">{{ _("nav.video_bank") }}</a>
+        <a href="/upload">{{ _("nav.upload") }}</a>
         <span id="space-indicator" style="margin-left: auto;" hx-get="/api/space" hx-trigger="load"></span>
+
+        <!-- Language dropdown -->
+        <div class="lang-dropdown">
+            <button class="lang-btn" id="lang-btn" type="button">
+                <span class="lang-flag">{{ current_flag }}</span>
+                <span class="lang-code">{{ current_lang.upper() }}</span>
+                <span class="lang-arrow">▼</span>
+            </button>
+            <div class="lang-menu" id="lang-menu">
+                <a hx-post="/api/lang" hx-vals='{"lang": "en"}' hx-target="body">
+                    <span class="lang-flag">🇬🇧</span>{{ _("lang.en") }}
+                </a>
+                <a hx-post="/api/lang" hx-vals='{"lang": "fr"}' hx-target="body">
+                    <span class="lang-flag">🇫🇷</span>{{ _("lang.fr") }}
+                </a>
+            </div>
+        </div>
     </nav>
     <div class="container">
         {% block content %}{% endblock %}
     </div>
     {% include "_upload_popup.html" %}
+
+    <!-- i18n translations for JavaScript -->
+    <script>
+        window.TRANSLATIONS = {
+            "upload.untitled": "{{ _('upload.untitled') }}",
+            "upload.completed": "{{ _('upload.completed') }}",
+            "upload.failed": "{{ _('upload.failed') }}",
+            "upload.network_error": "{{ _('upload.network_error') }}",
+            "upload.resumed": "{{ _('upload.resumed') }}",
+            "btn.retry": "{{ _('btn.retry') }}",
+            "clip.creating": "{{ _('clip.creating') }}",
+            "btn.create_clip": "{{ _('btn.create_clip') }}",
+            "clip.min_duration": "{{ _('clip.min_duration') }}",
+            "clip.failed": "{{ _('clip.failed') }}",
+            "clip.network_error": "{{ _('clip.network_error') }}"
+        };
+        window._ = function(key) {
+            return window.TRANSLATIONS[key] || key;
+        };
+    </script>
+
+    <!-- Language dropdown toggle -->
+    <script>
+        (function() {
+            var btn = document.getElementById('lang-btn');
+            var menu = document.getElementById('lang-menu');
+            if (btn && menu) {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    menu.classList.toggle('open');
+                });
+                document.addEventListener('click', function() {
+                    menu.classList.remove('open');
+                });
+                menu.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            }
+        })();
+    </script>
+
     <script src="/static/js/upload.js"></script>
     <script src="/static/js/clipper.js"></script>
 </body>

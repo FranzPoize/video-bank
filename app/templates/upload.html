@@ -1,25 +1,25 @@
 {% extends "base.html" %}
-{% block title %}Upload Video — Video Bank{% endblock %}
+{% block title %}{{ _("page.upload") }} — {{ _("nav.video_bank") }}{% endblock %}
 
 {% block content %}
-<h1 style="margin-bottom: 1.5rem;">Upload Video</h1>
+<h1 style="margin-bottom: 1.5rem;">{{ _("page.upload") }}</h1>
 
 {% if error %}
 <div class="error">{{ error }}</div>
 {% endif %}
 
 <form id="upload-form" action="/api/videos" method="post" enctype="multipart/form-data">
-    <label for="name">Video Name</label>
-    <input type="text" id="name" name="name" required placeholder="My cool clip">
+    <label for="name">{{ _("form.video_name") }}</label>
+    <input type="text" id="name" name="name" required placeholder="{{ _('form.placeholder.name') }}">
 
-    <label for="file">Video File</label>
+    <label for="file">{{ _("form.video_file") }}</label>
     <input type="file" id="file" name="file" accept="video/mp4,video/webm,video/quicktime" required>
 
-    <label for="tags">Tags (comma-separated)</label>
-    <input type="text" id="tags" name="tags" placeholder="tutorial, funny, demo">
+    <label for="tags">{{ _("form.tags") }}</label>
+    <input type="text" id="tags" name="tags" placeholder="{{ _('form.placeholder.tags') }}">
 
-    <button type="submit" class="btn btn-primary">Upload</button>
+    <button type="submit" class="btn btn-primary">{{ _("btn.upload") }}</button>
 </form>
 
-<p style="margin-top: 1rem;"><a href="/" style="color: #4361ee;">&larr; Back to list</a></p>
+<p style="margin-top: 1rem;"><a href="/" style="color: #4361ee;">{{ _("link.back_to_list") }}</a></p>
 {% endblock %}

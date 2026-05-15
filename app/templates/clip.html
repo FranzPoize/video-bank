@@ -1,15 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Clip: {{ video.name }} — Video Bank{% endblock %}
+{% block title %}{{ _("page.create_clip") }} — {{ _("nav.video_bank") }}{% endblock %}
 
 {% block content %}
 <div class="video-wrapper">
     <div style="margin-bottom: 1rem;">
         <a href="/video/{{ video.id }}" style="color: #4361ee; text-decoration: none; display: inline-block; margin-bottom: 0.5rem;">
-            &larr; Back to video
+            {{ _("link.back_to_video") }}
         </a>
-        <h1 style="margin-bottom: 0.25rem;">Create Clip</h1>
+        <h1 style="margin-bottom: 0.25rem;">{{ _("page.create_clip") }}</h1>
         <p style="color: #888; font-size: 0.9rem;">
-            Source: {{ video.name }}
+            {{ _("clip.source") }} {{ video.name }}
         </p>
     </div>
 
@@ -18,18 +18,18 @@
         <div class="video-player">
             <video id="clip-video" controls preload="metadata">
                 <source src="{{ video.video_url }}" type="{{ video.mime_type }}">
-                Your browser does not support the video element.
+                {{ _("video.browser_no_video") }}
             </video>
         </div>
 
         <!-- Seeker Controls -->
         <div id="seeker" class="seeker-controls">
             <div class="seeker-row">
-                <span class="seeker-label seeker-start">Start</span>
+                <span class="seeker-label seeker-start">{{ _("clip.start") }}</span>
                 <input type="range" id="clip-start" min="0" max="100" step="0.1" value="0" class="seeker-slider">
             </div>
             <div class="seeker-row">
-                <span class="seeker-label seeker-end">End</span>
+                <span class="seeker-label seeker-end">{{ _("clip.end") }}</span>
                 <input type="range" id="clip-end" min="0" max="100" step="0.1" value="0" class="seeker-slider">
             </div>
 
@@ -39,7 +39,7 @@
             </div>
 
             <p class="seeker-hint">
-                Click the timeline to seek. Minimum clip duration: 1 second.
+                {{ _("clip.hint") }}
             </p>
 
             <!-- Error Display -->
@@ -49,7 +49,7 @@
             <div style="text-align: center;">
                 <button id="create-clip-btn" class="btn btn-primary"
                         data-video-id="{{ video.id }}">
-                    Create Clip
+                    {{ _("btn.create_clip") }}
                 </button>
             </div>
         </div>

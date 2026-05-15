@@ -14,7 +14,7 @@
                 <a href="/video/{{ video.id }}" style="color: inherit; text-decoration: none;">{{ video.name }}</a>
             </h3>
             <p style="font-size: 0.8rem; color: #888; margin-bottom: 0.5rem;">
-                Uploaded {{ video.upload_date }}
+                {{ _("video.uploaded") }} {{ video.upload_date }}
             </p>
             {% if video.tags and video.tags|length > 0 %}
             <div style="display: flex; gap: 0.25rem; flex-wrap: wrap;">
@@ -31,12 +31,12 @@
 </div>
 {% elif active_tag_id is not none %}
 <div class="empty-state">
-    <p>No videos match this filter.</p>
-    <p style="margin-top: 1rem;"><a href="/" class="btn btn-primary">Clear filter</a></p>
+    <p>{{ _("video.no_videos_filter") }}</p>
+    <p style="margin-top: 1rem;"><a href="/" class="btn btn-primary">{{ _("filter.clear") }}</a></p>
 </div>
 {% else %}
 <div class="empty-state">
-    <p>No videos yet.</p>
-    <p style="margin-top: 1rem;"><a href="/upload" class="btn btn-primary">Upload your first video</a></p>
+    <p>{{ _("video.no_videos_yet") }}</p>
+    <p style="margin-top: 1rem;"><a href="/upload" class="btn btn-primary">{{ _("video.upload_first") }}</a></p>
 </div>
 {% endif %}

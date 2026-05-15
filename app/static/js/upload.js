@@ -8,6 +8,11 @@
 (function () {
   "use strict";
 
+  // Translation helper (falls back to key if translation missing)
+  function _(key) {
+    return (window.TRANSLATIONS && window.TRANSLATIONS[key]) || key;
+  }
+
   const UPLOAD_FORM_SELECTOR = "#upload-form";
   const POPUP_ID = "upload-popup";
   const STORAGE_KEY = "upload-active";
@@ -90,15 +95,15 @@
             "</span>" +
             '<span style="color:#888;font-size:0.8rem;">' +
             (state.status === "completed"
-              ? "&#10003; Done"
+              ? "&#10003; " + _("upload.completed")
               : state.status === "failed"
-                ? "&#10007; Failed"
-                : "&#8987; Resumed") +
+                ? "&#10007; " + _("upload.failed")
+                : "&#8987; " + _("upload.resumed")) +
             "</span></div>" +
             (state.status === "uploading"
               ? progressBarHTML(0)
               : state.status === "failed"
-                ? '<button onclick="location.reload()" style="margin-top:6px;padding:2px 8px;font-size:0.8rem;background:#e63946;color:#fff;border:none;border-radius:4px;cursor:pointer;">Retry</button>'
+                ? '<button onclick="location.reload()" style="margin-top:6px;padding:2px 8px;font-size:0.8rem;background:#e63946;color:#fff;border:none;border-radius:4px;cursor:pointer;">' + _("btn.retry") + '</button>'
                 : "")
         );
       }
@@ -123,7 +128,7 @@
     const filename =
       formData.get("file") && formData.get("file").name
         ? formData.get("file").name
-        : "Untitled";
+        : _("upload.untitled");
 
     event.preventDefault();
 
@@ -159,7 +164,7 @@
             '<span style="flex:1;">' +
             escapeHtml(filename) +
             "</span>" +
-            '<span style="color:#2d6a4f;font-size:0.8rem;">Completed</span></div>'
+            '<span style="color:#2d6a4f;font-size:0.8rem;">' + _("upload.completed") + '</span></div>'
         );
         saveState(filename, "completed");
 
@@ -176,8 +181,8 @@
             '<span style="flex:1;">' +
             escapeHtml(filename) +
             "</span>" +
-            '<span style="color:#e63946;font-size:0.8rem;">Failed</span></div>' +
-            '<button onclick="location.reload()" style="margin-top:6px;padding:2px 8px;font-size:0.8rem;background:#e63946;color:#fff;border:none;border-radius:4px;cursor:pointer;">Retry</button>'
+            '<span style="color:#e63946;font-size:0.8rem;">' + _("upload.failed") + '</span></div>' +
+            '<button onclick="location.reload()" style="margin-top:6px;padding:2px 8px;font-size:0.8rem;background:#e63946;color:#fff;border:none;border-radius:4px;cursor:pointer;">' + _("btn.retry") + '</button>'
         );
         saveState(filename, "failed");
       }
@@ -191,8 +196,8 @@
           '<span style="flex:1;">' +
           escapeHtml(filename) +
           "</span>" +
-          '<span style="color:#e63946;font-size:0.8rem;">Network Error</span></div>' +
-          '<button onclick="location.reload()" style="margin-top:6px;padding:2px 8px;font-size:0.8rem;background:#e63946;color:#fff;border:none;border-radius:4px;cursor:pointer;">Retry</button>'
+          '<span style="color:#e63946;font-size:0.8rem;">' + _("upload.network_error") + '</span></div>' +
+          '<button onclick="location.reload()" style="margin-top:6px;padding:2px 8px;font-size:0.8rem;background:#e63946;color:#fff;border:none;border-radius:4px;cursor:pointer;">' + _("btn.retry") + '</button>'
       );
       saveState(filename, "failed");
     });

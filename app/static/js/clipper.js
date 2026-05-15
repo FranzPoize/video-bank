@@ -7,6 +7,11 @@
 (function () {
   "use strict";
 
+  // Translation helper (falls back to key if translation missing)
+  function _(key) {
+    return (window.TRANSLATIONS && window.TRANSLATIONS[key]) || key;
+  }
+
   const VIDEO_ID = "clip-video";
   const START_ID = "clip-start";
   const END_ID = "clip-end";
@@ -99,12 +104,12 @@
 
     // Client-side validation
     if (end - start < MIN_DURATION) {
-      errorDisplay.textContent = "Minimum clip duration is 1 second.";
+      errorDisplay.textContent = _("clip.min_duration");
       return;
     }
 
     btn.disabled = true;
-    btn.textContent = "Creating...";
+    btn.textContent = _("clip.creating");
     errorDisplay.textContent = "";
 
     try {
@@ -120,18 +125,18 @@
       const data = await response.json();
 
       if (!response.ok) {
-        errorDisplay.textContent = data.error || "Failed to create clip.";
+        errorDisplay.textContent = data.error || _("clip.failed");
         btn.disabled = false;
-        btn.textContent = "Create Clip";
+        btn.textContent = _("btn.create_clip");
         return;
       }
 
       // Success — redirect to new clip's detail page
       window.location.href = "/video/" + data.id;
     } catch (err) {
-      errorDisplay.textContent = "Network error. Please try again.";
+      errorDisplay.textContent = _("clip.network_error");
       btn.disabled = false;
-      btn.textContent = "Create Clip";
+      btn.textContent = _("btn.create_clip");
     }
   }
 

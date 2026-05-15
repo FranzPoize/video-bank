@@ -1,0 +1,74 @@
+{
+  "nav.video_bank": "Video Bank",
+  "nav.upload": "Upload",
+
+  "page.videos": "Videos",
+  "page.upload": "Upload Video",
+  "page.edit_video": "Edit Video",
+  "page.create_clip": "Create Clip",
+  "page.error": "Error",
+
+  "filter.label": "Filter:",
+  "filter.all": "All",
+  "filter.clear": "Clear filter",
+
+  "video.uploaded": "Uploaded",
+  "video.mb": "MB",
+  "video.no_videos_filter": "No videos match this filter.",
+  "video.no_videos_yet": "No videos yet.",
+  "video.upload_first": "Upload your first video",
+
+  "form.video_name": "Video Name",
+  "form.video_file": "Video File",
+  "form.tags": "Tags (comma-separated)",
+  "form.placeholder.name": "My cool clip",
+  "form.placeholder.tags": "tutorial, funny, demo",
+
+  "btn.upload": "Upload",
+  "btn.save_changes": "Save Changes",
+  "btn.cancel": "Cancel",
+  "btn.delete_video": "Delete Video",
+  "btn.edit": "Edit",
+  "btn.clip": "Clip",
+  "btn.create_clip": "Create Clip",
+  "btn.go_home": "Go to Home",
+  "btn.retry": "Retry",
+
+  "link.back_to_list": "← Back to list",
+  "link.back_to_videos": "← Back to all videos",
+  "link.back_to_video": "← Back to video",
+
+  "clip.source": "Source:",
+  "clip.start": "Start",
+  "clip.end": "End",
+  "clip.hint": "Click the timeline to seek. Minimum clip duration: 1 second.",
+  "clip.creating": "Creating...",
+  "clip.min_duration": "Minimum clip duration is 1 second.",
+  "clip.failed": "Failed to create clip.",
+  "clip.network_error": "Network error. Please try again.",
+
+  "edit.file_info": "File:",
+  "edit.danger_zone": "Danger Zone",
+  "edit.danger_desc": "Permanently delete this video and its thumbnail. This cannot be undone.",
+  "edit.confirm_delete": "Are you sure you want to delete",
+
+  "error.video_not_found": "Video not found",
+  "error.file_not_found": "File not found on disk",
+  "error.page_not_found": "The page you're looking for doesn't exist.",
+
+  "upload.untitled": "Untitled",
+  "upload.completed": "Completed",
+  "upload.failed": "Failed",
+  "upload.network_error": "Network Error",
+  "upload.resumed": "Resumed",
+
+  "space.unknown": "Space: unknown",
+  "space.gb_free": "GB free",
+
+  "video.browser_no_video": "Your browser does not support the video element.",
+  "video.tags_heading": "Tags",
+
+  "lang.switch": "Language",
+  "lang.en": "English",
+  "lang.fr": "Français"
+}

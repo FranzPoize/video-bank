@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Error — Video Bank{% endblock %}
+{% block title %}{{ _("page.error") }} — {{ _("nav.video_bank") }}{% endblock %}
 
 {% block content %}
 <div style="text-align: center; padding: 3rem;">
     <h1 style="font-size: 3rem; color: #e63946; margin-bottom: 1rem;">{{ status_code }}</h1>
     <p style="font-size: 1.2rem; color: #888; margin-bottom: 2rem;">{{ detail }}</p>
-    <a href="/" class="btn btn-primary">Go to Home</a>
+    <a href="/" class="btn btn-primary">{{ _("btn.go_home") }}</a>
 </div>
 {% endblock %}

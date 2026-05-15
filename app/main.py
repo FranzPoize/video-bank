@@ -10,9 +10,8 @@ import os
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # Ensure the project root is on sys.path for imports
@@ -31,6 +30,12 @@ LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 from app.database import init_db
 from app.routes.videos import router as videos_router
 from app.routes.tags import router as tags_router
+from app.templates import (
+    templates,
+    get_i18n_context,
+    parse_accept_language,
+    DEFAULT_LANG,
+)
 
 app = FastAPI(title="Video Bank")
 
@@ -51,26 +56,68 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 app.include_router(videos_router)
 app.include_router(tags_router)
 
-# Templates for error pages
-templates = Jinja2Templates(directory=str(_project_root / "app" / "templates"))
+
+# ── Language detection middleware ──────────────────────────────────
+@app.middleware("http")
+async def language_middleware(request: Request, call_next):
+    """Detect user language and store in request.state.
+
+    Priority:
+    1. `lang` cookie (highest)
+    2. Accept-Language header
+    3. Default: "en"
+    """
+    # Check for lang cookie
+    lang = request.cookies.get("lang")
+
+    # Fall back to Accept-Language header
+    if lang is None:
+        accept_lang = request.headers.get("accept-language")
+        lang = parse_accept_language(accept_lang)
+
+    # Default to English
+    if lang is None:
+        lang = DEFAULT_LANG
+
+    # Store in request.state for use in routes
+    request.state.current_lang = lang
+    request.state.i18n = get_i18n_context(lang)
+
+    response = await call_next(request)
+    return response
 
 
+# ── Exception handlers with i18n ──────────────────────────────────
 @app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request, exc):
+async def http_exception_handler(request: Request, exc):
     """Return a styled error page for HTTP errors."""
+    # Get i18n context from request.state (set by middleware)
+    i18n = getattr(request.state, "i18n", get_i18n_context(DEFAULT_LANG))
+
     return templates.TemplateResponse(
         request, "error.html",
-        {"status_code": exc.status_code, "detail": exc.detail},
+        {
+            **i18n,
+            "status_code": exc.status_code,
+            "detail": exc.detail,
+        },
         status_code=exc.status_code,
     )
 
 
 @app.exception_handler(404)
-async def not_found_handler(request, exc):
+async def not_found_handler(request: Request, exc):
     """Override 404 with a custom template."""
+    i18n = getattr(request.state, "i18n", get_i18n_context(DEFAULT_LANG))
+    _ = i18n["_"]
+
     return templates.TemplateResponse(
         request, "error.html",
-        {"status_code": 404, "detail": "The page you're looking for doesn't exist."},
+        {
+            **i18n,
+            "status_code": 404,
+            "detail": _("error.page_not_found"),
+        },
         status_code=404,
     )
 

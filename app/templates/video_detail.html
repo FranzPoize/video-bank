@@ -1,32 +1,32 @@
 {% extends "base.html" %}
-{% block title %}{{ video.name }} — Video Bank{% endblock %}
+{% block title %}{{ video.name }} — {{ _("nav.video_bank") }}{% endblock %}
 
 {% block content %}
 <div class="video-wrapper">
     <div class="page-header">
         <div>
-            <a href="/" style="color: #4361ee; text-decoration: none; display: inline-block; margin-bottom: 0.5rem;">&larr; Back to all videos</a>
+            <a href="/" style="color: #4361ee; text-decoration: none; display: inline-block; margin-bottom: 0.5rem;">{{ _("link.back_to_videos") }}</a>
             <h1 style="margin-bottom: 0.25rem;">{{ video.name }}</h1>
             <p style="color: #888; font-size: 0.9rem;">
-                Uploaded {{ video.upload_date }} &middot; {{ "%.1f"|format(video.file_size / (1024*1024)) }} MB
+                {{ _("video.uploaded") }} {{ video.upload_date }} &middot; {{ "%.1f"|format(video.file_size / (1024*1024)) }} {{ _("video.mb") }}
             </p>
         </div>
         <div class="actions">
-            <a href="/video/{{ video.id }}/clip" class="btn btn-primary btn-sm">Clip</a>
-            <a href="/video/{{ video.id }}/edit" class="btn btn-primary btn-sm">Edit</a>
+            <a href="/video/{{ video.id }}/clip" class="btn btn-primary btn-sm">{{ _("btn.clip") }}</a>
+            <a href="/video/{{ video.id }}/edit" class="btn btn-primary btn-sm">{{ _("btn.edit") }}</a>
         </div>
     </div>
 
     <div class="video-player">
         <video controls preload="metadata">
             <source src="{{ video.video_url }}" type="{{ video.mime_type }}">
-            Your browser does not support the video element.
+            {{ _("video.browser_no_video") }}
         </video>
     </div>
 
     {% if video.tags and video.tags|length > 0 %}
     <div style="margin-bottom: 1.5rem;">
-        <h3 style="font-size: 0.9rem; color: #888; margin-bottom: 0.5rem;">Tags</h3>
+        <h3 style="font-size: 0.9rem; color: #888; margin-bottom: 0.5rem;">{{ _("video.tags_heading") }}</h3>
         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
             {% for tag in video.tags %}
             <span style="background: #e0e7ff; color: #4361ee; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.85rem;">
