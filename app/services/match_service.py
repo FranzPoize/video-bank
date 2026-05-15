@@ -1,0 +1,224 @@
+"""
+Business logic for match CRUD and video linking.
+
+Each function takes an aiosqlite.Connection as the first argument.
+This keeps them testable with in-memory databases.
+"""
+
+import logging
+
+import aiosqlite
+
+from app.services.stats_calculator import compute_all
+
+logger = logging.getLogger(__name__)
+
+
+async def create_match(
+    db: aiosqlite.Connection,
+    name: str,
+    match_date: str,
+    opponent: str = "",
+    location: str = "",
+    notes: str = "",
+    **stats,
+) -> dict:
+    """Create a new match record.
+
+    Args:
+        db: Database connection.
+        name: Match name/title (required).
+        match_date: Date string (required, format YYYY-MM-DD).
+        opponent: Opponent team name.
+        location: Venue/location.
+        notes: Free-text notes.
+        **stats: Optional stat fields (points, assists, rebounds, etc.)
+
+    Returns:
+        Created match as dict.
+
+    Raises:
+        ValueError: If name or match_date is empty.
+    """
+    if not name or not name.strip():
+        raise ValueError("Match name is required")
+    if not match_date or not match_date.strip():
+        raise ValueError("Match date is required")
+
+    # Build INSERT with dynamic stat columns
+    stat_fields = []
+    stat_values = []
+    for key in (
+        "minutes_played", "points",
+        "two_point_attempts", "two_point_made",
+        "three_point_attempts", "three_point_made",
+        "free_throw_attempts", "free_throw_made",
+        "offensive_rebounds", "defensive_rebounds", "total_rebounds",
+        "assists", "steals", "blocks", "turnovers", "personal_fouls",
+    ):
+        val = stats.get(key)
+        stat_fields.append(key)
+        stat_values.append(val if val is not None else None)  # Keep None as NULL
+
+    columns = ", ".join(["name", "match_date", "opponent", "location", "notes"] + stat_fields)
+    placeholders = ", ".join(["?"] * (5 + len(stat_fields)))
+    values = [name.strip(), match_date.strip(), opponent, location, notes] + stat_values
+
+    cursor = await db.execute(
+        f"INSERT INTO matches ({columns}) VALUES ({placeholders})",
+        values,
+    )
+    await db.commit()
+    match_id = cursor.lastrowid
+    logger.info("Match created: id=%d, name=%s", match_id, name)
+    return await get_match(db, match_id)
+
+
+async def get_match(db: aiosqlite.Connection, match_id: int) -> dict | None:
+    """Fetch a single match by ID. Returns None if not found."""
+    cursor = await db.execute("SELECT * FROM matches WHERE id = ?", (match_id,))
+    row = await cursor.fetchone()
+    return dict(row) if row else None
+
+
+async def list_matches(db: aiosqlite.Connection) -> list[dict]:
+    """Return all matches ordered by match_date descending."""
+    cursor = await db.execute(
+        "SELECT * FROM matches ORDER BY match_date DESC"
+    )
+    rows = await cursor.fetchall()
+    return [dict(r) for r in rows]
+
+
+async def update_match(db: aiosqlite.Connection, match_id: int, **fields) -> dict | None:
+    """Update specified fields on a match.
+
+    Accepts any match column as a keyword argument.
+    Returns updated match dict, or None if match not found.
+    """
+    allowed_fields = {
+        "name", "match_date", "opponent", "location", "notes",
+        "minutes_played", "points",
+        "two_point_attempts", "two_point_made",
+        "three_point_attempts", "three_point_made",
+        "free_throw_attempts", "free_throw_made",
+        "offensive_rebounds", "defensive_rebounds", "total_rebounds",
+        "assists", "steals", "blocks", "turnovers", "personal_fouls",
+    }
+
+    updates = {k: v for k, v in fields.items() if k in allowed_fields}
+    if not updates:
+        return await get_match(db, match_id)
+
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    values = list(updates.values()) + [match_id]
+
+    await db.execute(
+        f"UPDATE matches SET {set_clause} WHERE id = ?",
+        values,
+    )
+    await db.commit()
+    logger.info("Match updated: id=%d, fields=%s", match_id, list(updates.keys()))
+    return await get_match(db, match_id)
+
+
+async def delete_match(db: aiosqlite.Connection, match_id: int) -> bool:
+    """Delete a match. Returns True if deleted, False if not found.
+
+    ON DELETE CASCADE cleans up match_videos associations automatically.
+    """
+    cursor = await db.execute("DELETE FROM matches WHERE id = ?", (match_id,))
+    await db.commit()
+    deleted = cursor.rowcount > 0
+    if deleted:
+        logger.info("Match deleted: id=%d", match_id)
+    return deleted
+
+
+async def link_video(db: aiosqlite.Connection, match_id: int, video_id: int):
+    """Link a video to a match. Raises IntegrityError on duplicate."""
+    await db.execute(
+        "INSERT OR IGNORE INTO match_videos (match_id, video_id) VALUES (?, ?)",
+        (match_id, video_id),
+    )
+    await db.commit()
+
+
+async def unlink_video(db: aiosqlite.Connection, match_id: int, video_id: int):
+    """Remove a video from a match."""
+    await db.execute(
+        "DELETE FROM match_videos WHERE match_id = ? AND video_id = ?",
+        (match_id, video_id),
+    )
+    await db.commit()
+
+
+async def get_match_with_videos(db: aiosqlite.Connection, match_id: int) -> dict | None:
+    """Fetch a match along with its linked videos (each with tags)."""
+    match = await get_match(db, match_id)
+    if match is None:
+        return None
+
+    cursor = await db.execute(
+        """SELECT v.* FROM videos v
+           JOIN match_videos mv ON v.id = mv.video_id
+           WHERE mv.match_id = ?
+           ORDER BY v.upload_date DESC""",
+        (match_id,),
+    )
+    videos = [dict(r) for r in await cursor.fetchall()]
+
+    # Attach tags to each video
+    from app.services.tag_service import get_video_tags
+    for v in videos:
+        v["tags"] = await get_video_tags(db, v["id"])
+
+    match["videos"] = videos
+    return match
+
+
+async def get_match_with_stats(db: aiosqlite.Connection, match_id: int) -> dict | None:
+    """Fetch a match with computed statistics.
+
+    Returns dict with 'match' (raw) and 'computed' (derived stats).
+    Returns None if match not found.
+    """
+    match = await get_match(db, match_id)
+    if match is None:
+        return None
+    return {
+        "match": match,
+        "computed": compute_all(match),
+    }
+
+
+async def get_unlinked_videos(db: aiosqlite.Connection, match_id: int) -> list[dict]:
+    """Return videos NOT already linked to this match.
+
+    Used for the 'Link Video' picker UI.
+    """
+    cursor = await db.execute(
+        """SELECT v.id, v.name, v.filename, v.mime_type
+           FROM videos v
+           WHERE v.id NOT IN (
+               SELECT video_id FROM match_videos WHERE match_id = ?
+           )
+           ORDER BY v.upload_date DESC""",
+        (match_id,),
+    )
+    rows = await cursor.fetchall()
+    return [dict(r) for r in rows]
+
+
+async def get_video_matches(db: aiosqlite.Connection, video_id: int) -> list[dict]:
+    """Return all matches that a video is linked to."""
+    cursor = await db.execute(
+        """SELECT m.id, m.name, m.match_date
+           FROM matches m
+           JOIN match_videos mv ON m.id = mv.match_id
+           WHERE mv.video_id = ?
+           ORDER BY m.match_date DESC""",
+        (video_id,),
+    )
+    rows = await cursor.fetchall()
+    return [dict(r) for r in rows]

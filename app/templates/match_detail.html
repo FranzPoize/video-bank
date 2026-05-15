@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ match.name }} — {{ _("nav.video_bank") }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="/" style="color: #4361ee; text-decoration: none; display: inline-block; margin-bottom: 0.5rem;">{{ _("match.back_to_list") }}</a>
+        <h1 style="margin-bottom: 0.25rem;">{{ match.name }}</h1>
+        <p style="color: #888; font-size: 0.9rem;">
+            {{ match.match_date }}
+            {% if match.opponent %} &middot; vs {{ match.opponent }}{% endif %}
+            {% if match.location %} &middot; {{ match.location }}{% endif %}
+        </p>
+    </div>
+    <div class="actions">
+        <a href="/matches/{{ match.id }}/edit" class="btn btn-primary btn-sm">{{ _("btn.edit") }}</a>
+        <form action="/matches/{{ match.id }}/delete" method="post" style="display: inline;"
+              onsubmit="return confirm('{{ _("match.confirm_delete") }}')">
+            <button type="submit" class="btn btn-danger btn-sm">{{ _("btn.delete") }}</button>
+        </form>
+    </div>
+</div>
+
+{% if match.notes %}
+<div style="margin-bottom: 1.5rem; padding: 0.75rem; background: #f9f9f9; border-radius: 6px; color: #555;">
+    {{ match.notes }}
+</div>
+{% endif %}
+
+{% include "_match_stats.html" %}
+
+<h2 style="margin-top: 2rem; margin-bottom: 0.75rem;">{{ _("match.videos") }}</h2>
+<div id="match-videos-section">
+    {% include "_match_videos.html" %}
+</div>
+{% endblock %}

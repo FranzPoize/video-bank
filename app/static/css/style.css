@@ -152,3 +152,231 @@ form input[type="file"] { width: 100%; padding: 0.5rem; border: 1px solid #ccc; 
 .lang-flag {
     margin-right: 0.4rem;
 }
+
+/* ── Match Cards ────────────────────────────── */
+.match-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+.match-card {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: box-shadow 0.2s, transform 0.2s;
+}
+.match-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    transform: translateY(-2px);
+}
+.match-card-link {
+    display: block;
+    padding: 1.25rem;
+    text-decoration: none;
+    color: inherit;
+}
+.match-card-title {
+    font-size: 1.1rem;
+    color: #4361ee;
+    margin-bottom: 0.5rem;
+}
+.match-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    font-size: 0.85rem;
+    color: #888;
+    margin-bottom: 0.75rem;
+}
+.match-card-stats {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.9rem;
+    color: #555;
+    border-top: 1px solid #eee;
+    padding-top: 0.75rem;
+}
+.stat-highlight {
+    font-weight: 700;
+    color: #e63946;
+}
+
+/* ── Stats Table ──────────────────────────── */
+.stats-table-wrapper {
+    overflow-x: auto;
+    margin-bottom: 0.5rem;
+}
+.stats-table {
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    width: 100%;
+    min-width: 700px;
+}
+.stats-table th {
+    background: #1a1a2e;
+    color: #fff;
+    padding: 0.5rem 0.4rem;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+.stats-table td {
+    padding: 0.5rem 0.4rem;
+    text-align: center;
+    border-bottom: 1px solid #eee;
+    white-space: nowrap;
+}
+.stats-table tbody tr:hover {
+    background: #f0f4ff;
+}
+.stat-pts {
+    font-weight: 700;
+    color: #e63946;
+}
+
+/* ── Advanced Stats ─────────────────────────── */
+.advanced-stats-row {
+    display: flex;
+    gap: 2rem;
+    padding: 0.75rem;
+    background: #f8f9ff;
+    border-radius: 8px;
+}
+.advanced-stat {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.advanced-stat-label {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #555;
+}
+.advanced-stat-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #1a1a2e;
+}
+
+/* ── Linked Videos ─────────────────────────── */
+.linked-videos {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.linked-video-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.linked-video-link {
+    font-weight: 600;
+    color: #4361ee;
+    text-decoration: none;
+}
+.linked-video-link:hover {
+    text-decoration: underline;
+}
+.linked-video-item .video-tags {
+    margin-left: auto;
+    display: flex;
+    gap: 0.3rem;
+}
+.linked-video-item .tag-badge {
+    background: #e0e7ff;
+    color: #4361ee;
+    padding: 0.15rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+}
+
+/* ── Stats Form Grid ─────────────────────────── */
+.stats-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.75rem;
+}
+.stat-field label {
+    font-size: 0.8rem;
+    color: #888;
+    margin-bottom: 0.15rem;
+}
+.stat-field input {
+    width: 100%;
+    padding: 0.4rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+/* ── Match Videos Section (Link/Remove controls) ───────── */
+.match-video-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+.link-video-form {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background: #f8f9ff;
+    border-radius: 8px;
+}
+.link-video-form select {
+    padding: 0.4rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    flex: 1;
+}
+
+/* ── Match Context on Video Detail ────────────────── */
+.match-context {
+    margin-bottom: 1.5rem;
+    padding: 0.75rem;
+    background: #f0f4ff;
+    border-radius: 8px;
+}
+.match-context h3 {
+    font-size: 0.9rem;
+    color: #888;
+    margin-bottom: 0.5rem;
+}
+.match-context-item {
+    display: inline-block;
+    margin-right: 0.75rem;
+    margin-bottom: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    background: #fff;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: #4361ee;
+    text-decoration: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.match-context-item:hover {
+    background: #e0e7ff;
+}
+
+/* ── Responsive: Match Cards ──────────────────── */
+@media (max-width: 768px) {
+    .match-grid {
+        grid-template-columns: 1fr;
+    }
+    .stats-form-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .advanced-stats-row {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+}

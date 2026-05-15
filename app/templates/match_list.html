@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ _("page.matches") }} — {{ _("nav.video_bank") }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>{{ _("page.matches") }}</h1>
+    <div class="actions">
+        <a href="/matches/new" class="btn btn-primary">{{ _("match.new") }}</a>
+    </div>
+</div>
+
+{% if matches and matches|length > 0 %}
+<div class="match-grid">
+    {% for match in matches %}
+    <div class="match-card">
+        <a href="/matches/{{ match.id }}" class="match-card-link">
+            <h3 class="match-card-title">{{ match.name }}</h3>
+            <div class="match-card-meta">
+                <span class="match-card-date">{{ match.match_date }}</span>
+                {% if match.opponent %}
+                <span class="match-card-opponent">{{ _("match.form.opponent") }}: {{ match.opponent }}</span>
+                {% endif %}
+                {% if match.location %}
+                <span class="match-card-location">{{ match.location }}</span>
+                {% endif %}
+            </div>
+            {% if match.points is not none %}
+            <div class="match-card-stats">
+                <span class="stat-highlight">{{ match.points }} {{ _("stat.pts") }}</span>
+                {% if match.assists is not none %}
+                <span>{{ match.assists }} {{ _("stat.ast") }}</span>
+                {% endif %}
+                {% if match.total_rebounds is not none %}
+                <span>{{ match.total_rebounds }} {{ _("stat.trb") }}</span>
+                {% endif %}
+            </div>
+            {% endif %}
+        </a>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <p>{{ _("match.no_matches") }}</p>
+    <a href="/matches/new" class="btn btn-primary">{{ _("match.create_first") }}</a>
+</div>
+{% endif %}
+{% endblock %}

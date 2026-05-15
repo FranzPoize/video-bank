@@ -1,0 +1,25 @@
+<div class="match-card">
+    <a href="/matches/{{ match.id }}" class="match-card-link">
+        <h3 class="match-card-title">{{ match.name }}</h3>
+        <div class="match-card-meta">
+            <span class="match-card-date">{{ match.match_date }}</span>
+            {% if match.opponent %}
+            <span class="match-card-opponent">vs {{ match.opponent }}</span>
+            {% endif %}
+            {% if match.location %}
+            <span class="match-card-location">{{ match.location }}</span>
+            {% endif %}
+        </div>
+        {% if match.points is not none %}
+        <div class="match-card-stats">
+            <span class="stat-highlight">{{ match.points }} {{ _("stat.pts") }}</span>
+            {% if match.assists is not none %}
+            <span>{{ match.assists }} {{ _("stat.ast") }}</span>
+            {% endif %}
+            {% if match.total_rebounds is not none %}
+            <span>{{ match.total_rebounds }} {{ _("stat.trb") }}</span>
+            {% endif %}
+        </div>
+        {% endif %}
+    </a>
+</div>

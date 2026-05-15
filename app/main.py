@@ -24,6 +24,7 @@ LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 from app.database import init_db
 from app.routes.videos import router as videos_router
 from app.routes.tags import router as tags_router
+from app.routes.matches import router as matches_router
 from app.middleware import CacheControlMiddleware
 from app.templates import (
     templates,
@@ -53,6 +54,7 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 # Include routers
 app.include_router(videos_router)
 app.include_router(tags_router)
+app.include_router(matches_router)
 
 
 # ── Language detection middleware ──────────────────────────────────
@@ -136,7 +138,7 @@ async def on_startup():
         )
     # ─────────────────────────────────────────────────────────────
 
-    await init_db(migration_version=4)
+    await init_db(migration_version=5)
 
     # Check for ffmpeg (required for clip creation)
     import shutil

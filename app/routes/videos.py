@@ -112,7 +112,7 @@ async def switch_language(request: Request):
     return response
 
 
-@router.get("/")
+@router.get("/videos")
 async def list_videos(
     request: Request,
     tag_id: int | None = None,
@@ -197,9 +197,9 @@ async def create_video(
 
     # Return JSON for XHR uploads so JS can handle the response
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
-        return JSONResponse({"id": video["id"], "redirect": "/"})
+        return JSONResponse({"id": video["id"], "redirect": "/videos"})
 
-    return RedirectResponse(url="/", status_code=303)
+    return RedirectResponse(url="/videos", status_code=303)
 
 
 @router.get("/api/videos/{video_id}/file")
@@ -231,12 +231,17 @@ async def video_detail(request: Request, video_id: int, db=Depends(get_db)):
     enriched = _video_to_card(video)
     enriched["video_url"] = f"/api/videos/{video_id}/file"
 
+    # Get matches this video belongs to
+    from app.services.match_service import get_video_matches
+    video_matches = await get_video_matches(db, video_id)
+
     return templates.TemplateResponse(
         request,
         "video_detail.html",
         {
             **i18n,
             "video": enriched,
+            "video_matches": video_matches,
         },
     )
 
@@ -288,7 +293,7 @@ async def delete_video(video_id: int, db=Depends(get_db)):
     deleted = await video_service.delete_video(db, video_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Video not found")
-    return RedirectResponse(url="/", status_code=303)
+    return RedirectResponse(url="/videos", status_code=303)
 
 
 @router.get("/videos/{video_id}/clip")

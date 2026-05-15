@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}{% if match %}{{ _("match.edit") }}{% else %}{{ _("match.new") }}{% endif %} — {{ _("nav.video_bank") }}{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 1.5rem;">{% if match %}{{ _("match.edit") }}{% else %}{{ _("match.new") }}{% endif %}</h1>
+
+{% if errors and errors|length > 0 %}
+<div class="error">
+    {% for err in errors %}
+    <p>{{ err }}</p>
+    {% endfor %}
+</div>
+{% endif %}
+
+<form action="{% if match %}/api/matches/{{ match.id }}{% else %}/api/matches{% endif %}" method="post">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <div>
+            <label>{{ _("match.form.name") }}</label>
+            <input type="text" name="name" value="{{ match.name if match else '' }}" required>
+        </div>
+        <div>
+            <label>{{ _("match.form.date") }}</label>
+            <input type="date" name="match_date" value="{{ match.match_date if match else '' }}" required>
+        </div>
+        <div>
+            <label>{{ _("match.form.opponent") }}</label>
+            <input type="text" name="opponent" value="{{ match.opponent if match else '' }}">
+        </div>
+        <div>
+            <label>{{ _("match.form.location") }}</label>
+            <input type="text" name="location" value="{{ match.location if match else '' }}">
+        </div>
+    </div>
+
+    <h3 style="margin-top: 1.5rem; margin-bottom: 0.75rem;">{{ _("match.box_score") }}</h3>
+    <div class="stats-form-grid">
+        <div class="stat-field">
+            <label>{{ _("stat.mp") }}</label>
+            <input type="number" name="minutes_played" step="0.1" min="0"
+                   value="{{ match.minutes_played if match and match.minutes_played is not none else '' }}">
+        </div>
+        <div class="stat-field">
+            <label>{{ _("stat.pts") }}</label>
+            <input type="number" name="points" min="0"
+                   value="{{ match.points if match and match.points is not none else '' }}">
+        </div>
+        <div class="stat-field">
+            <label>{{ _("stat.two_pa") }}</label>
+            <input type="number" name="two_point_attempts" min="0"
+                   value="{{ match.two_point_attempts if match and match.two_point_attempts is not none else '' }}">
+        </div>
+        <div class="stat-field">
+            <label>{{ _("stat.two_pm") }}</label>
+            <input type="number" name="two_point_made" min="0"
+                   value="{{ match.two_point_made if match and match.two_point_made is not none else '' }}">
+        </div>
+        <div class="stat-field">
+            <label>{{ _("stat.three_pa") }}</label>
+            <input type="number" name="three_point_attempts" min="0"
+                   value="{{ match.three_point_attempts if match and match.three_point_attempts is not none else '' }}">
+        </div>
+        <div class="stat-field">
+            <label>{{ _("stat.three_pm") }}</label>
+            <input type="number" name="three_point_made" min="0"
+                   value="{{ match.three_point_made if match and match.three_point_made is not none else '' }}">
+        </div>
+        <div class="stat-field">
+            <label>{{ _("stat.fta") }}</label>
+            <input type="number" name="free_throw_attempts" min="0"
+                   value="{{ match.free_throw_attempts if match and match.free_throw_attempts is not none else '' }}">
+        </div>
+        <div class="stat-field">
+            <label>{{ _("stat.ftm") }}</label>
+            <input type="number" name="free_throw_made" min="0"
+                   value="{{ match.free_throw_made if match and match.free_throw_made is not none else '' }}">
+        </div>
+        <div class="stat-field">
+            <label>{{ _("stat.orb") }}</label>
+            <input type="number" name="offensive_rebounds" min="0"
+                   value="{{ match.offensive_rebounds if match and match.offensive_rebounds is not none else '' }}">
+        </div>
+        <div class="stat-field">
+            <label>{{ _("stat.drb") }}</label>
+            <input type="number" name="defensive_rebounds" min="0"
+                   value="{{ match.defensive_rebounds if match and match.defensive_rebounds is not none else '' }}">
+        </div>
+        <div class="stat-field">
+            <label>{{ _("stat.trb") }}</label>
+            <input type="number" name="total_rebounds" min="0"
+                   value="{{ match.total_rebounds if match and match.total_rebounds is not none else '' }}">
+        </div>
+        <div class="stat-field">
+            <label>{{ _("stat.ast") }}</label>
+            <input type="number" name="assists" min="0"
+                   value="{{ match.assists if match and match.assists is not none else '' }}">
+        </div>
+        <div class="stat-field">
+            <label>{{ _("stat.stl") }}</label>
+            <input type="number" name="steals" min="0"
+                   value="{{ match.steals if match and match.steals is not none else '' }}">
+        </div>
+        <div class="stat-field">
+            <label>{{ _("stat.blk") }}</label>
+            <input type="number" name="blocks" min="0"
+                   value="{{ match.blocks if match and match.blocks is not none else '' }}">
+        </div>
+        <div class="stat-field">
+            <label>{{ _("stat.tov") }}</label>
+            <input type="number" name="turnovers" min="0"
+                   value="{{ match.turnovers if match and match.turnovers is not none else '' }}">
+        </div>
+        <div class="stat-field">
+            <label>{{ _("stat.pf") }}</label>
+            <input type="number" name="personal_fouls" min="0"
+                   value="{{ match.personal_fouls if match and match.personal_fouls is not none else '' }}">
+        </div>
+    </div>
+
+    <div style="margin-top: 1.5rem;">
+        <label>{{ _("match.form.notes") }}</label>
+        <textarea name="notes" rows="3" style="width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; resize: vertical;">{{ match.notes if match else '' }}</textarea>
+    </div>
+
+    <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem;">
+        <button type="submit" class="btn btn-primary">{{ _("match.form.save") }}</button>
+        <a href="/{% if match %}matches/{{ match.id }}{% endif %}" class="btn btn-inactive">{{ _("match.form.cancel") }}</a>
+    </div>
+</form>
+{% endblock %}

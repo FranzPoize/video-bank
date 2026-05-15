@@ -3,9 +3,9 @@
     <div id="filter-bar" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; align-items: center;">
         <span style="font-size: 0.85rem; color: #888; font-weight: 600;">{{ _("filter.label") }}</span>
 
-        <a href="/"
+        <a href="/videos"
            class="btn btn-sm {% if active_tag_id is none %}btn-primary{% else %}btn-inactive{% endif %}"
-           hx-get="/"
+           hx-get="/videos"
            hx-target="#main-content"
            hx-swap="outerHTML"
            hx-push-url="true">
@@ -13,9 +13,9 @@
         </a>
 
         {% for tag in all_tags %}
-        <a href="/?tag_id={{ tag.id }}"
+        <a href="/videos?tag_id={{ tag.id }}"
            class="btn btn-sm {% if active_tag_id == tag.id %}btn-primary{% else %}btn-inactive{% endif %}"
-           hx-get="/?tag_id={{ tag.id }}"
+           hx-get="/videos?tag_id={{ tag.id }}"
            hx-target="#main-content"
            hx-swap="outerHTML"
            hx-push-url="true">

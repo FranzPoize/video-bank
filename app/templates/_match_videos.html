@@ -1,0 +1,40 @@
+{% if match.videos and match.videos|length > 0 %}
+<div class="linked-videos">
+    {% for video in match.videos %}
+    <div class="linked-video-item">
+        <a href="/videos/{{ video.id }}" class="linked-video-link">{{ video.name }}</a>
+        {% if video.tags and video.tags|length > 0 %}
+        <div class="video-tags">
+            {% for tag in video.tags %}
+            <span class="tag-badge">{{ tag }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <div class="match-video-controls">
+            <button class="btn btn-danger btn-sm"
+                    hx-post="/api/matches/{{ match.id }}/videos/{{ video.id }}/remove"
+                    hx-target="#match-videos-section"
+                    hx-swap="outerHTML">
+                {{ _("match.remove_video") }}
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p style="color: #888;">{{ _("match.no_videos") }}</p>
+{% endif %}
+
+{% if unlinked_videos and unlinked_videos|length > 0 %}
+<form class="link-video-form"
+      hx-post="/api/matches/{{ match.id }}/videos"
+      hx-target="#match-videos-section"
+      hx-swap="outerHTML">
+    <select name="video_id">
+        {% for v in unlinked_videos %}
+        <option value="{{ v.id }}">{{ v.name }}</option>
+        {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary btn-sm">{{ _("match.link_video") }}</button>
+</form>
+{% endif %}

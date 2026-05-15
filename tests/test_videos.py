@@ -20,7 +20,7 @@ class TestVideoList:
     @pytest.mark.asyncio
     async def test_empty_list(self, client):
         """GET / should show empty state when no videos exist."""
-        response = await client.get("/")
+        response = await client.get("/videos")
         assert response.status_code == 200
         assert "No videos yet" in response.text
 
@@ -36,7 +36,7 @@ class TestVideoList:
         assert upload_resp.status_code == 303  # redirect
 
         # Now list should show it
-        list_resp = await client.get("/")
+        list_resp = await client.get("/videos")
         assert list_resp.status_code == 200
         assert "Test Video" in list_resp.text
 
@@ -53,7 +53,7 @@ class TestVideoUpload:
             files={"file": ("clip.mp4", b"fake-video-content", "video/mp4")},
         )
         assert response.status_code == 303
-        assert response.headers["location"] == "/"
+        assert response.headers["location"] == "/videos"
 
     @pytest.mark.asyncio
     async def test_upload_creates_db_record(self, client, db):
@@ -158,7 +158,7 @@ class TestVideoFilter:
 
         # Filter by "alpha" — we don't know the tag_id, so use the list view
         # with the tag name present in the response
-        list_resp = await client.get("/")
+        list_resp = await client.get("/videos")
         assert "Video A" in list_resp.text
         assert "Video B" in list_resp.text
 
@@ -172,7 +172,7 @@ class TestVideoFilter:
         )
 
         response = await client.get(
-            "/",
+            "/videos",
             headers={"HX-Request": "true"},
         )
         assert response.status_code == 200
@@ -220,7 +220,7 @@ class TestVideoCRUD:
         video_id = await create_test_video(client, "To Delete", "")
 
         # Verify it shows in list
-        list_before = await client.get("/")
+        list_before = await client.get("/videos")
         assert "To Delete" in list_before.text
 
         # Delete it
@@ -228,7 +228,7 @@ class TestVideoCRUD:
         assert response.status_code == 303
 
         # Verify it's gone from list
-        list_after = await client.get("/")
+        list_after = await client.get("/videos")
         assert "To Delete" not in list_after.text
 
     @pytest.mark.asyncio
@@ -319,7 +319,7 @@ class TestAsyncUpload:
         assert "id" in data
         assert data["id"] >= 1
         assert "redirect" in data
-        assert data["redirect"] == "/"
+        assert data["redirect"] == "/videos"
 
     @pytest.mark.asyncio
     async def test_upload_xhr_bad_format(self, client):
@@ -358,7 +358,7 @@ class TestAsyncUpload:
             files={"file": ("form.mp4", b"fake-content", "video/mp4")},
         )
         assert response.status_code == 303
-        assert response.headers["location"] == "/"
+        assert response.headers["location"] == "/videos"
 
 
 class TestDiskSpace:

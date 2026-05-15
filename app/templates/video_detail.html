@@ -5,7 +5,7 @@
 <div class="video-wrapper">
     <div class="page-header">
         <div>
-            <a href="/" style="color: #4361ee; text-decoration: none; display: inline-block; margin-bottom: 0.5rem;">{{ _("link.back_to_videos") }}</a>
+            <a href="/videos" style="color: #4361ee; text-decoration: none; display: inline-block; margin-bottom: 0.5rem;">{{ _("link.back_to_videos") }}</a>
             <h1 style="margin-bottom: 0.25rem;">{{ video.name }}</h1>
             <p style="color: #888; font-size: 0.9rem;">
                 {{ _("video.uploaded") }} {{ video.upload_date }} &middot; {{ "%.1f"|format(video.file_size / (1024*1024)) }} {{ _("video.mb") }}
@@ -16,6 +16,17 @@
             <a href="/videos/{{ video.id }}/edit" class="btn btn-primary btn-sm">{{ _("btn.edit") }}</a>
         </div>
     </div>
+
+    {% if video_matches and video_matches|length > 0 %}
+    <div class="match-context">
+        <h3>{{ _("match.linked_matches") }}</h3>
+        {% for m in video_matches %}
+        <a href="/matches/{{ m.id }}" class="match-context-item">
+            {{ m.name }} ({{ m.match_date }})
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
 
     <div class="video-player">
         <video controls preload="metadata">
