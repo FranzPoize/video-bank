@@ -7,3 +7,4 @@ uploads/thumbnails/*
 !uploads/thumbnails/.gitkeep
 data/*.db
 .env
+logs/
