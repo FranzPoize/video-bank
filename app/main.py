@@ -24,6 +24,7 @@ LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 from app.database import init_db
 from app.routes.videos import router as videos_router
 from app.routes.tags import router as tags_router
+from app.middleware import CacheControlMiddleware
 from app.templates import (
     templates,
     get_i18n_context,
@@ -34,6 +35,7 @@ from app.templates import (
 _project_root = Path(__file__).resolve().parent.parent
 
 app = FastAPI(title="Video Bank")
+app.add_middleware(CacheControlMiddleware)
 
 # Mount static directories for uploaded files
 uploads_dir = _project_root / "uploads"

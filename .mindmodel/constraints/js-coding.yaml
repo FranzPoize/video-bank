@@ -1,0 +1,95 @@
+# JavaScript Coding Conventions
+# Applies to: all .js files in app/static/js/
+
+id: js-coding
+description: JavaScript coding conventions used in this project for vanilla JS (no framework).
+
+rules:
+  - Wrap all code in an IIFE: (function() { ... })();
+  - Always use "use strict" at the top of the IIFE body
+  - Use camelCase for all variable and function names
+  - Use UPPER_SNAKE_CASE for module-level constants
+  - Use const by default, let only when reassignment is needed, never var
+  - Use document.getElementById / querySelector for DOM access — avoid jQuery
+  - Wait for DOM ready: check document.readyState before init
+  - Use async/await for asynchronous operations (fetch, XHR event-driven callbacks)
+  - Define a local _(key) translation function that falls back to window.TRANSLATIONS
+  - Use template literals (`...`) for string interpolation with variables
+
+examples:
+  - description: "IIFE structure with strict mode, const, camelCase, DOM-ready init"
+    file: app/static/js/upload.js
+    snippet: |
+      (function () {
+        "use strict";
+
+        function _(key) {
+          return (window.TRANSLATIONS && window.TRANSLATIONS[key]) || key;
+        }
+
+        const UPLOAD_FORM_SELECTOR = "#upload-form";
+        const POPUP_ID = "upload-popup";
+        const STORAGE_KEY = "upload-active";
+
+        function getPopup() {
+          let popup = document.getElementById(POPUP_ID);
+          if (!popup) {
+            popup = document.createElement("div");
+            popup.id = POPUP_ID;
+            popup.style.cssText = "position:fixed;bottom:1rem;left:1rem;...";
+            document.body.appendChild(popup);
+          }
+          return popup;
+        }
+
+        function init() {
+          restoreState();
+          const form = document.querySelector(UPLOAD_FORM_SELECTOR);
+          if (form) {
+            form.addEventListener("submit", handleUpload);
+          }
+        }
+
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", init);
+        } else {
+          init();
+        }
+      })();
+
+  - description: "Async/await with fetch for API calls"
+    file: app/static/js/clipper.js
+    snippet: |
+      async function onSubmit() {
+        const videoId = btn.getAttribute("data-video-id");
+
+        try {
+          const response = await fetch("/api/video/" + videoId + "/clip", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Requested-With": "XMLHttpRequest",
+            },
+            body: JSON.stringify({ start: start, end: end }),
+          });
+
+          const data = await response.json();
+          if (!response.ok) {
+            errorDisplay.textContent = data.error || _("clip.failed");
+            return;
+          }
+          window.location.href = "/video/" + data.id;
+        } catch (err) {
+          errorDisplay.textContent = _("clip.network_error");
+        }
+      }
+
+anti_examples:
+  - description: "Never use var declarations"
+    snippet: 'var x = 5;  // BAD — use const or let instead'
+
+  - description: "Never use jQuery — the project uses vanilla JS"
+    snippet: "$('#upload-form').submit(handleUpload);  // BAD — use document.querySelector instead"
+
+  - description: "Never define functions outside an IIFE at module level"
+    snippet: 'function handleUpload(event) { ... }  // BAD — wrap in (function() { "use strict"; ... })();'

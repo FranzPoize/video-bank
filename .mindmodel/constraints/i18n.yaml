@@ -1,0 +1,104 @@
+# Internationalization Patterns
+# Applies to: translations/*.json, app/templates.py, Jinja2 templates, static JS files
+
+id: i18n
+description: Three-layer internationalization system — Python backend, Jinja2 templates, and JavaScript.
+
+rules:
+  - Translation keys use dotted namespace format: section.key or section.subsection.key
+  - English translations are the base (en.json), other languages override (fr.json)
+  - Python: use _(key) function from i18n context — key is returned verbatim if missing (debug-friendly)
+  - Jinja2 templates: use {{ _("key.name") }} syntax — the _ function is injected via template context
+  - JavaScript: window.TRANSLATIONS dict is populated from Jinja2, with window._(key) as the JS translation function
+  - JS translations are injected in base.html via inline <script> block
+  - Language detection middleware: cookie > Accept-Language header > default "en"
+  - Language switch via POST /api/lang with HX-Redirect for HTMX
+  - Language is stored in a 30-day cookie
+  - All template-rendering routes must spread **i18n into TemplateResponse context
+  - Default language is "en", supported languages are defined in LANG_FLAGS
+
+examples:
+  - description: "i18n context setup in middleware and route usage"
+    file: app/main.py
+    snippet: |
+      @app.middleware("http")
+      async def language_middleware(request: Request, call_next):
+          lang = request.cookies.get("lang")
+          if lang is None:
+              accept_lang = request.headers.get("accept-language")
+              lang = parse_accept_language(accept_lang)
+          if lang is None:
+              lang = DEFAULT_LANG
+          request.state.current_lang = lang
+          request.state.i18n = get_i18n_context(lang)
+          response = await call_next(request)
+          return response
+
+  - description: "Translation key structure in JSON files"
+    file: translations/en.json
+    snippet: |
+      {
+        "nav.video_bank": "Video Bank",
+        "nav.upload": "Upload",
+        "page.videos": "Videos",
+        "form.tags": "Tags (comma-separated)",
+        "btn.upload": "Upload",
+        "btn.save_changes": "Save Changes",
+        "error.video_not_found": "Video not found",
+        "video.no_videos_yet": "No videos yet.",
+        "clip.min_duration": "Minimum clip duration is 1 second."
+      }
+
+  - description: "JS translation function and window.TRANSLATIONS injection"
+    file: app/templates/base.html
+    snippet: |
+      <script>
+          window.TRANSLATIONS = {
+              "upload.untitled": "{{ _('upload.untitled') }}",
+              "upload.completed": "{{ _('upload.completed') }}",
+              "upload.failed": "{{ _('upload.failed') }}",
+              "clip.creating": "{{ _('clip.creating') }}",
+              "clip.failed": "{{ _('clip.failed') }}",
+              "clip.network_error": "{{ _('clip.network_error') }}"
+          };
+          window._ = function(key) {
+              return window.TRANSLATIONS[key] || key;
+          };
+      </script>
+
+  - description: "Jinja2 template using translation function"
+    file: app/templates/_video_grid.html
+    snippet: |
+      <p style="font-size: 0.8rem; color: #888; margin-bottom: 0.5rem;">
+          {{ _("video.uploaded") }} {{ video.upload_date }}
+      </p>
+
+  - description: "i18n context construction in templates.py"
+    file: app/templates.py
+    snippet: |
+      def get_i18n_context(lang: str) -> dict:
+          translations = get_translations(lang)
+          return {
+              "_": make_translator(translations),
+              "current_lang": lang,
+              "current_flag": get_flag(lang),
+          }
+
+  - description: "JS usage of translation function in upload.js"
+    file: app/static/js/upload.js
+    snippet: |
+      function _(key) {
+        return (window.TRANSLATIONS && window.TRANSLATIONS[key]) || key;
+      }
+
+      // Used later:
+      '<span style="color:#2d6a4f;font-size:0.8rem;">' + _("upload.completed") + '</span>'
+
+anti_examples:
+  - description: "Do NOT hardcode user-facing strings — use translation keys"
+    snippet: |
+      <h1>Videos</h1>  # BAD — should be {{ _("page.videos") }}
+
+      # In Python:
+      raise HTTPException(status_code=404, detail="Video not found")  # BAD
+      # Should use _(...) but HTTP exceptions are not translated — API error detail in English is acceptable

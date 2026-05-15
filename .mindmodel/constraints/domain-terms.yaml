@@ -1,0 +1,118 @@
+# Business Domain Vocabulary
+# Core entities, operations, and terminology used across the codebase
+
+id: domain-terms
+description: >
+  Business domain vocabulary for the Video Bank application. Defines core entities,
+  key operations, and naming conventions for domain concepts.
+
+rules:
+  - "Video: a stored video file with metadata (id, name, filename, original_name, mime_type, file_size, upload_date)"
+  - "Clip: a sub-video extracted from a source video, identified by source_video_id + clip_start + clip_end fields"
+  - "Source Video: the original video a clip was derived from (referenced via source_video_id FK)"
+  - "Tag: a lowercased, unique label associated with videos via the video_tags junction table"
+  - "Upload: operation flow of validate_file → save_upload → generate_thumbnail → DB insert"
+  - "Tag Filter: filtering videos by tag_id via ?tag_id=X query parameter"
+  - "Stream: HTTP range-request video delivery via /api/video/{id}/file"
+  - "Delete: cascade operation that removes files first, then DB record"
+  - "Thumbnail: a .webp image generated at the 1-second mark of a video using ffmpeg"
+
+entity_definitions:
+  - entity: "Video"
+    table: "videos"
+    fields:
+      - id: INTEGER PRIMARY KEY AUTOINCREMENT
+      - name: TEXT NOT NULL — user-facing display name
+      - filename: TEXT NOT NULL — UUID-based stored filename (e.g., abc123.mp4)
+      - original_name: TEXT NOT NULL — original upload filename
+      - mime_type: TEXT NOT NULL — MIME type (e.g., video/mp4)
+      - file_size: INTEGER NOT NULL — in bytes
+      - upload_date: TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      - source_video_id: "INTEGER REFERENCES videos(id) — NULL for originals, set for clips"
+      - clip_start: "REAL — NULL for originals, start time in seconds for clips"
+      - clip_end: "REAL — NULL for originals, end time in seconds for clips"
+
+  - entity: "Tag"
+    table: "tags"
+    fields:
+      - id: INTEGER PRIMARY KEY AUTOINCREMENT
+      - name: TEXT NOT NULL UNIQUE — lowercased tag name
+
+  - entity: "Video-Tag Association"
+    table: "video_tags"
+    fields:
+      - video_id: "INTEGER REFERENCES videos(id) ON DELETE CASCADE"
+      - tag_id: "INTEGER REFERENCES tags(id) ON DELETE CASCADE"
+      - "UNIQUE(video_id, tag_id)"
+
+key_operations:
+  - operation: "Upload"
+    flow:
+      - validate_file (extension, size, disk space)
+      - save_upload (write bytes to uploads/videos/{uuid}.{ext})
+      - generate_thumbnail (ffmpeg, best-effort)
+      - INSERT videos record
+      - set_video_tags (comma-separated tag parsing)
+
+  - operation: "Create Clip"
+    flow:
+      - fetch source video from DB
+      - ffprobe duration
+      - validate time bounds (start < end, >= 1s, within duration)
+      - generate clip filename: clip_{stem}_{start}_{end}_{short_uuid}.{ext}
+      - ffmpeg stream copy
+      - generate thumbnail
+      - INSERT clip record with source_video_id, clip_start, clip_end
+      - copy source tags
+      - return new clip
+
+  - operation: "Tag Management"
+    flow:
+      - on-the-fly creation: get_or_create_tag normalizes (strip + lowercase)
+      - replace-all semantics on edit: DELETE existing, INSERT new
+      - rename: validate uniqueness, UPDATE
+      - delete: ON DELETE CASCADE cleans up video_tags
+
+storage_paths:
+  - type: "Video files"
+    path: "uploads/videos/{uuid}.{ext}"
+  - type: "Thumbnails"
+    path: "uploads/thumbnails/{stem}.webp"
+  - type: "Clip files"
+    path: "uploads/videos/clip_{stem}_{start}_{end}_{short_uuid}.{ext}"
+
+examples:
+  - description: "Video entity creation in DB — shows all fields including clip-related"
+    file: app/services/clip_service.py
+    snippet: |
+      cursor = await db.execute(
+          """INSERT INTO videos (name, filename, original_name, mime_type, file_size,
+                                 source_video_id, clip_start, clip_end)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+          (
+              f"{source['name']} (clip)",
+              clip_filename,
+              clip_filename,
+              source["mime_type"],
+              clip_path.stat().st_size,
+              source_video_id,
+              start_time,
+              end_time,
+          ),
+      )
+
+  - description: "Tag on-the-fly creation with normalization"
+    file: app/services/tag_service.py
+    snippet: |
+      async def get_or_create_tag(db, name: str) -> int:
+          """Find a tag by name or create it. Returns the tag id."""
+          name = name.strip().lower()
+          if not name:
+              raise ValueError("Tag name cannot be empty")
+          cursor = await db.execute("SELECT id FROM tags WHERE name = ?", (name,))
+          row = await cursor.fetchone()
+          if row:
+              return row["id"]
+          cursor = await db.execute("INSERT INTO tags (name) VALUES (?)", (name,))
+          await db.commit()
+          return cursor.lastrowid

@@ -1,0 +1,115 @@
+# Async/Await Patterns
+# Applies to: all Python files
+
+id: async-patterns
+description: Conventions for async execution — when to use async vs sync, subprocess management, and async context managers.
+
+rules:
+  - Use async def for all I/O operations (database queries, file writes, HTTP requests, subprocess calls)
+  - Use def (sync) for pure computation functions (validation, formatting, pure data transformations)
+  - Use asyncio.create_subprocess_exec (NOT subprocess.run) for calling external tools (ffmpeg, ffprobe)
+  - Always use await proc.communicate() after spawning subprocesses — never use proc.wait() alone (risk of deadlock with pipes)
+  - Set stdout=asyncio.subprocess.PIPE / stderr=asyncio.subprocess.PIPE for capturing output
+  - Use asyncio.subprocess.DEVNULL when output is not needed (ffmpeg output)
+  - Check proc.returncode after communicate() — non-zero means failure
+  - Database connections use async context managers (async with or try/finally with await db.close())
+  - FastAPI dependency injection via async generator with Depends(get_db)
+  - Test fixtures use async generators with yield
+
+examples:
+  - description: "async def for DB queries, def for pure validation"
+    file: app/services/video_service.py and clip_service.py
+    snippet: |
+      # Async (I/O):
+      async def get_video(db, video_id: int) -> dict | None:
+          cursor = await db.execute("SELECT * FROM videos WHERE id = ?", (video_id,))
+          row = await cursor.fetchone()
+          return dict(row) if row else None
+
+      # Sync (pure computation):
+      def _validate_times(start: float, end: float, duration: float | None):
+          if start < 0:
+              raise ValueError("Start time must be non-negative.")
+          if end <= start:
+              raise ValueError("Start must be before end.")
+
+  - description: "asyncio.create_subprocess_exec for ffmpeg/ffprobe"
+    file: app/services/clip_service.py
+    snippet: |
+      async def _get_video_duration(video_path: Path) -> float | None:
+          ffprobe = shutil.which("ffprobe")
+          if ffprobe is None:
+              return None
+          proc = await asyncio.create_subprocess_exec(
+              ffprobe,
+              "-v", "error",
+              "-show_entries", "format=duration",
+              "-of", "default=noprint_wrappers=1:nokey=1",
+              str(video_path),
+              stdout=asyncio.subprocess.PIPE,
+              stderr=asyncio.subprocess.PIPE,
+          )
+          stdout, _ = await proc.communicate()
+          if proc.returncode != 0:
+              return None
+          try:
+              return float(stdout.decode().strip())
+          except (ValueError, TypeError):
+              return None
+
+  - description: "ffmpeg call with DEVNULL stdout (no capture needed)"
+    file: app/services/file_service.py
+    snippet: |
+      proc = await asyncio.create_subprocess_exec(
+          ffmpeg, "-y", "-ss", str(THUMBNAIL_TIME_SECONDS), "-i", str(video_path),
+          "-vframes", "1", "-q:v", "2", str(thumb_path),
+          stdout=asyncio.subprocess.DEVNULL,
+          stderr=asyncio.subprocess.DEVNULL,
+      )
+      return_code = await proc.wait()
+
+  - description: "async generator for DB dependency"
+    file: app/database.py
+    snippet: |
+      async def get_db(db_path: str | None = None):
+          path = db_path or DEFAULT_DB_PATH
+          db = await aiosqlite.connect(path)
+          await db.execute("PRAGMA foreign_keys = ON")
+          db.row_factory = aiosqlite.Row
+          try:
+              yield db
+          finally:
+              await db.close()
+
+  - description: "Async test fixtures with yield and cleanup"
+    file: tests/conftest.py
+    snippet: |
+      @pytest_asyncio.fixture
+      async def db() -> AsyncGenerator[aiosqlite.Connection, None]:
+          db_conn = await aiosqlite.connect(":memory:")
+          await db_conn.execute("PRAGMA foreign_keys = ON")
+          db_conn.row_factory = aiosqlite.Row
+          # ... initialize schema ...
+          try:
+              yield db_conn
+          finally:
+              await db_conn.close()
+
+anti_examples:
+  - description: "Do NOT use subprocess.run() in async code — use asyncio.create_subprocess_exec"
+    snippet: |
+      import subprocess
+      result = subprocess.run(["ffprobe", str(video_path)], capture_output=True)  # BAD — blocks the event loop
+
+  - description: "Do NOT use proc.wait() without communicate() when pipes are set"
+    snippet: |
+      proc = await asyncio.create_subprocess_exec(ffmpeg, ..., stdout=asyncio.subprocess.PIPE)
+      return_code = await proc.wait()  # BAD — risk of deadlock with full pipe buffer
+      # GOOD:
+      stdout, stderr = await proc.communicate()
+      return_code = proc.returncode
+
+  - description: "Do NOT make pure computation functions async"
+    snippet: |
+      async def format_time(seconds: float) -> str:  # BAD — no I/O, use def
+          ...

@@ -1,0 +1,80 @@
+# Video Bank — .mindmodel Manifest
+# Generated from codebase analysis of /home/franz/project/video-bank
+
+name: video-bank
+version: 2
+description: >
+  Self-hosted video clip manager. Python/FastAPI backend with Jinja2+HTMX frontend,
+  SQLite storage, ffmpeg-based video processing. Single-process monolith deployed
+  via systemd on Ubuntu.
+
+categories:
+  - id: python-coding
+    path: constraints/python-coding.yaml
+    description: Python coding conventions — snake_case, imports, structuring
+    group: constraints
+
+  - id: js-coding
+    path: constraints/js-coding.yaml
+    description: JavaScript coding conventions — IIFE, camelCase, strict mode
+    group: constraints
+
+  - id: domain-terms
+    path: constraints/domain-terms.yaml
+    description: Business domain vocabulary and entity definitions
+    group: constraints
+
+  - id: routes-api
+    path: constraints/routes-api.yaml
+    description: Route handler patterns and API endpoint design
+    group: constraints
+
+  - id: services
+    path: constraints/services.yaml
+    description: Service layer function patterns and structure
+    group: constraints
+
+  - id: database
+    path: constraints/database.yaml
+    description: Database schema, query patterns, and migration conventions
+    group: constraints
+
+  - id: testing
+    path: constraints/testing.yaml
+    description: Testing patterns — pytest, async fixtures, mocking
+    group: constraints
+
+  - id: i18n
+    path: constraints/i18n.yaml
+    description: Internationalization patterns across Python, Jinja2, and JS
+    group: constraints
+
+  - id: error-handling
+    path: constraints/error-handling.yaml
+    description: Error handling patterns — validation, HTTP errors, logging
+    group: constraints
+
+  - id: async-patterns
+    path: constraints/async-patterns.yaml
+    description: Async/await conventions and subprocess management
+    group: constraints
+
+  - id: frontend
+    path: constraints/frontend.yaml
+    description: Frontend patterns — HTMX, Jinja2 templates, CSS, JS
+    group: constraints
+
+  - id: file-io
+    path: constraints/file-io.yaml
+    description: File I/O, storage paths, and disk management patterns
+    group: constraints
+
+  - id: deployment
+    path: constraints/deployment.yaml
+    description: Deployment and infrastructure — systemd, logrotate, environment
+    group: constraints
+
+  - id: anti-patterns
+    path: constraints/anti-patterns.yaml
+    description: Documented anti-patterns and known issues to avoid
+    group: constraints

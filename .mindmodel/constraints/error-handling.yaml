@@ -1,0 +1,105 @@
+# Error Handling Patterns
+# Applies to: all Python files
+
+id: error-handling
+description: Three-level error handling strategy — ValueError for validation, HTTPException for not-found, RuntimeError for infrastructure.
+
+rules:
+  - ValueError: raised in service layer for validation errors (bad input, duplicate names, etc.)
+  - HTTPException(404): raised in route layer when entity not found (video, tag, file)
+  - RuntimeError: raised for infrastructure failures (ffmpeg missing/crash, disk errors)
+  - Route handlers catch ValueError → return 400 response (template or JSON depending on XHR)
+  - Route handlers catch RuntimeError → return 500 response with error details
+  - HTTPException(400) is raised directly in routes for malformed request body (invalid JSON, missing fields)
+  - Global exception handler in main.py returns styled error template for all HTTP errors
+  - 404 handler overrides default with custom template
+  - Service functions return False or None for expected "not found" — let the route decide the HTTP status
+  - Log validation failures at WARNING level, infrastructure failures at ERROR level
+  - In JS: catch network errors and display user-friendly messages from translation keys
+
+examples:
+  - description: "Route handler — catch ValueError for validation, RuntimeError for infrastructure"
+    file: app/routes/videos.py
+    snippet: |
+      @router.post("/api/video/{video_id}/clip")
+      async def create_clip(request: Request, video_id: int, db=Depends(get_db)):
+          # ... parse and validate JSON body ...
+          try:
+              clip = await clip_service.create_clip(db, video_id, start, end)
+          except ValueError as e:
+              return JSONResponse({"error": str(e)}, status_code=400)
+          except RuntimeError as e:
+              return JSONResponse({"error": str(e)}, status_code=500)
+          return JSONResponse({"id": clip["id"], "redirect": f"/video/{clip['id']}"})
+
+  - description: "Service layer — ValueError for validation, RuntimeError for infrastructure"
+    file: app/services/clip_service.py
+    snippet: |
+      def _validate_times(start: float, end: float, duration: float | None):
+          if start < 0:
+              raise ValueError("Start time must be non-negative.")
+          if end <= start:
+              raise ValueError("Start must be before end.")
+          if (end - start) < 1.0:
+              raise ValueError("Minimum clip duration is 1 second.")
+
+      # In create_clip():
+      ffmpeg = shutil.which("ffmpeg")
+      if ffmpeg is None:
+          raise RuntimeError("ffmpeg not found. Install with: sudo apt install ffmpeg")
+
+  - description: "Route handler — HTTPException for not-found, True/False from service"
+    file: app/routes/videos.py
+    snippet: |
+      @router.post("/video/{video_id}/delete")
+      async def delete_video(video_id: int, db=Depends(get_db)):
+          deleted = await video_service.delete_video(db, video_id)
+          if not deleted:
+              raise HTTPException(status_code=404, detail="Video not found")
+          return RedirectResponse(url="/", status_code=303)
+
+  - description: "Global HTTP exception handler with i18n support"
+    file: app/main.py
+    snippet: |
+      @app.exception_handler(StarletteHTTPException)
+      async def http_exception_handler(request: Request, exc):
+          i18n = getattr(request.state, "i18n", get_i18n_context(DEFAULT_LANG))
+          return templates.TemplateResponse(
+              request, "error.html",
+              {**i18n, "status_code": exc.status_code, "detail": exc.detail},
+              status_code=exc.status_code,
+          )
+
+  - description: "JS error handling with user-facing messages"
+    file: app/static/js/clipper.js
+    snippet: |
+      try {
+          const response = await fetch("/api/video/" + videoId + "/clip", { ... });
+          const data = await response.json();
+          if (!response.ok) {
+              errorDisplay.textContent = data.error || _("clip.failed");
+              return;
+          }
+      } catch (err) {
+          errorDisplay.textContent = _("clip.network_error");
+      }
+
+anti_examples:
+  - description: "Do NOT raise HTTPException in service layer — services should not depend on FastAPI"
+    snippet: |
+      # BAD:
+      from fastapi import HTTPException
+      async def get_video(db, video_id):
+          video = ...
+          if video is None:
+              raise HTTPException(status_code=404, detail="Not found")
+
+      # GOOD: return None and let route raise HTTPException
+      async def get_video(db, video_id) -> dict | None:
+          ...
+
+  - description: "Do NOT use 400 for resource-not-found — use 404"
+    snippet: 'raise HTTPException(status_code=400, detail="Video not found")  # BAD — use 404 for resources'
+
+  - description: "Do NOT expose internal error details in production responses"
+    snippet: 'raise HTTPException(status_code=500, detail=str(traceback.format_exc()))  # BAD — log it instead'

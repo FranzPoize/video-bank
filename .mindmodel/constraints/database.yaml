@@ -1,0 +1,109 @@
+# Database and Query Patterns
+# Applies to: app/database.py, all service files
+
+id: database
+description: SQLite database conventions — schema management, query patterns, migrations.
+
+rules:
+  - Always use parameterized queries with ? placeholders — NEVER use f-strings or string formatting for SQL
+  - Call await db.commit() after any INSERT, UPDATE, DELETE that should persist
+  - Enable PRAGMA foreign_keys = ON on every connection
+  - Set db.row_factory = aiosqlite.Row for dict-like row access
+  - Convert rows to dict() explicitly: dict(row) or [dict(r) for r in rows]
+  - Schema lives in app/database.py as SQL string constants, one per table
+  - Migrations are incremental: MIGRATIONS dict with version number → list of SQL statements
+  - Each migration SQL statement must be a single statement (aiosqlite limitation)
+  - Handle "duplicate column" errors gracefully for ALTER TABLE ADD COLUMN re-runs
+  - Use INTEGER PRIMARY KEY AUTOINCREMENT for all id columns
+  - Define FOREIGN KEY constraints with ON DELETE CASCADE where appropriate
+  - Create indexes for join columns (e.g., video_tags.video_id, video_tags.tag_id)
+  - Use UNIQUE constraints for many-to-many junction tables
+
+examples:
+  - description: "Parameterized query with ? placeholders — SELECT"
+    file: app/services/video_service.py
+    snippet: |
+      async def get_video(db, video_id: int) -> dict | None:
+          cursor = await db.execute("SELECT * FROM videos WHERE id = ?", (video_id,))
+          row = await cursor.fetchone()
+          if row is None:
+              return None
+          return dict(row)
+
+  - description: "Parameterized query — INSERT with commit"
+    file: app/services/video_service.py
+    snippet: |
+      cursor = await db.execute(
+          """INSERT INTO videos (name, filename, original_name, mime_type, file_size)
+             VALUES (?, ?, ?, ?, ?)""",
+          (name, filename, original_name, mime_type, file_size),
+      )
+      await db.commit()
+      video_id = cursor.lastrowid
+
+  - description: "JOIN query with parameterized filter"
+    file: app/services/video_service.py
+    snippet: |
+      cursor = await db.execute(
+          """SELECT v.* FROM videos v
+             JOIN video_tags vt ON v.id = vt.video_id
+             WHERE vt.tag_id = ?
+             ORDER BY v.upload_date DESC""",
+          (tag_id,),
+      )
+      rows = await cursor.fetchall()
+      videos = [dict(r) for r in rows]
+
+  - description: "Schema definition with FK constraints and indexes"
+    file: app/database.py
+    snippet: |
+      VIDEO_TAGS_TABLE = """
+      CREATE TABLE IF NOT EXISTS video_tags (
+          video_id INTEGER NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+          tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+          UNIQUE(video_id, tag_id)
+      );
+      """
+
+      IDX_VIDEO_TAGS_VIDEO = """
+      CREATE INDEX IF NOT EXISTS idx_video_tags_video_id ON video_tags(video_id);
+      """
+
+  - description: "Migration system — incremental versioned SQL"
+    file: app/database.py
+    snippet: |
+      MIGRATIONS = {
+          1: [VIDEOS_SCHEMA],
+          2: [],
+          3: [TAGS_TABLE, VIDEO_TAGS_TABLE, IDX_VIDEO_TAGS_VIDEO, IDX_VIDEO_TAGS_TAG],
+          4: [
+              "ALTER TABLE videos ADD COLUMN source_video_id INTEGER REFERENCES videos(id)",
+              "ALTER TABLE videos ADD COLUMN clip_start REAL",
+              "ALTER TABLE videos ADD COLUMN clip_end REAL",
+          ],
+      }
+
+      async def init_db(db_path: str | None = None, migration_version: int = 1):
+          db = await aiosqlite.connect(path)
+          await db.execute("PRAGMA foreign_keys = ON")
+          try:
+              for version in range(1, migration_version + 1):
+                  for stmt in MIGRATIONS.get(version, []):
+                      try:
+                          await db.execute(stmt)
+                      except Exception as e:
+                          if "duplicate column name" in str(e):
+                              continue
+                          raise
+              await db.commit()
+          finally:
+              await db.close()
+
+anti_examples:
+  - description: "NEVER use f-strings or string concatenation for SQL queries"
+    snippet: "await db.execute(f'SELECT * FROM videos WHERE id = {video_id}')  # BAD — SQL injection risk"
+
+  - description: "Do NOT forget to commit after writes"
+    snippet: |
+      await db.execute("INSERT INTO videos (...) VALUES (...)")
+      # BAD — missing await db.commit(), changes won't persist

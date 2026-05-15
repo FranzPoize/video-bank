@@ -1,0 +1,149 @@
+# Anti-Patterns and Known Issues
+# Documented items to fix or avoid when modifying the codebase
+
+id: anti-patterns
+description: Known anti-patterns, inconsistencies, and technical debt items identified during codebase analysis.
+
+rules:
+  - Do NOT introduce new instances of these anti-patterns
+  - When modifying nearby code, prefer to fix the anti-pattern if scope allows
+  - Document any new anti-patterns discovered with file locations and reasoning
+
+items:
+  - id: AP-001
+    severity: low
+    description: "Route URL inconsistency — /api/videos (plural) vs /api/video/{id} (singular)"
+    files:
+      - "app/routes/videos.py (lines 70, 154, 201, 316 — singular)
+      - app/routes/videos.py (line 155 — plural)"
+    guidance: "Kept for backward compatibility. New routes should use consistent plural form for collections."
+
+  - id: AP-002
+    severity: medium
+    description: "Duplicated _get_i18n() helper in videos.py and tags.py"
+    files:
+      - "app/routes/videos.py (lines 44-49)"
+      - "app/routes/tags.py (lines 18-23)"
+    guidance: "Refactor into app/templates.py and import from there. Both functions are identical."
+
+  - id: AP-003
+    severity: low
+    description: "sys.path manipulation in both main.py and conftest.py"
+    files:
+      - "app/main.py (lines 18-20)"
+      - "tests/conftest.py (lines 23-25)"
+    guidance: "This is a symptom of the project not being installed as a package. Consider using pip install -e . or PYTHONPATH."
+
+  - id: AP-004
+    severity: low
+    description: "_video_to_card() logic duplicated — function in videos.py + inline in video_detail route"
+    files:
+      - "app/routes/videos.py (lines 27-41 — function definition)"
+      - "app/routes/videos.py (lines 228-236 — inline duplicate in video_detail)"
+    guidance: "The video_detail route reimplements thumbnail logic inline instead of calling _video_to_card(). Refactor to use the shared function."
+
+  - id: AP-005
+    severity: low
+    description: "Thumbnail path resolution repeated across routes"
+    files:
+      - "app/routes/videos.py (lines 29-35, 228-236)"
+    guidance: "Extract thumbnail path resolution into a shared helper or move to file_service.py."
+
+  - id: AP-006
+    severity: low
+    description: "Tests use hardcoded IDs (video_id=1, tag_id=1)"
+    files:
+      - "tests/test_videos.py (multiple lines)"
+      - "tests/test_tags.py (multiple lines)"
+      - "tests/test_clips.py (multiple lines)"
+    guidance: "Since tests run on in-memory DB and IDs always start at 1, this works but is fragile. Consider using returned IDs from responses."
+
+  - id: AP-007
+    severity: low
+    description: "Clip source not found returns 400 instead of 404"
+    files:
+      - "tests/test_clips.py (line 66 — comment acknowledges this)"
+      - "app/routes/videos.py (line 350 — ValueError caught as 400)"
+    guidance: "Route catches ValueError from clip_service and returns 400. A nonexistent source video is semantically a 404. Consider raising a specific exception for 'not found' vs validation."
+
+  - id: AP-008
+    severity: medium
+    description: "HTMX loaded from unpkg.com CDN — no fallback"
+    files:
+      - "app/templates/base.html (line 7)"
+    guidance: "If CDN is unavailable, all HTMX functionality breaks. Consider bundling HTMX locally or adding a fallback script."
+
+  - id: AP-009
+    severity: low
+    description: "All CSS inline in base.html — no external CSS file"
+    files:
+      - "app/templates/base.html (lines 8-163)"
+    guidance: "CSS is entirely in a <style> block in base.html. For maintainability, extract to an external .css file in app/static/."
+
+  - id: AP-010
+    severity: low
+    description: "No CI pipeline, no Docker, no .env file support"
+    guidance: "Deployment is manual via systemd. No automated testing or deployment pipeline exists. Environment variables are set in the systemd unit file."
+
+  - id: AP-011
+    severity: medium
+    description: "Mock complexity in test_clips.py — deeply nested context managers and complex mock chains"
+    files:
+      - "tests/test_clips.py (lines 152-200, 222-263, 281-320)"
+    guidance: "Clip tests use 5+ levels of nested with patches, manual mock Path objects, and complex side_effects. These tests are brittle. Consider refactoring clip_service to accept a test-friendly interface."
+
+  - id: AP-012
+    severity: low
+    description: "Dormant import: video_service.py imports get_db but never uses it"
+    files:
+      - "app/services/video_service.py (line 10)"
+    guidance: "Remove unused import. The service layer receives db as an argument rather than using Depends()."
+
+  - id: AP-013
+    severity: info
+    description: "No type hints for db parameter in service functions"
+    files:
+      - "app/services/*.py (all service files)"
+    guidance: "Service functions declare db as a positional argument without type hint. Consider annotating as aiosqlite.Connection for better IDE support."
+
+examples:
+  - description: "Example of duplicated _video_to_card logic (AP-004)"
+    file: app/routes/videos.py
+    snippet: |
+      # Function (lines 27-41):
+      def _video_to_card(video: dict) -> dict:
+          thumb_stem = Path(video["filename"]).stem
+          thumb_path = (Path(__file__).resolve().parent.parent.parent / "uploads" / "thumbnails" / f"{thumb_stem}.jpg")
+          has_thumbnail = thumb_path.exists()
+          return {**video, "has_thumbnail": has_thumbnail, "thumbnail_url": ...}
+
+      # Inline duplicate in video_detail (lines 228-236):
+      enriched["thumbnail_url"] = f"/uploads/thumbnails/{thumb_stem}.jpg"
+      enriched["has_thumbnail"] = (Path(__file__).resolve().parent.parent.parent / "uploads" / "thumbnails" / f"{thumb_stem}.jpg").exists()
+      # Should be: enriched = _video_to_card(video) — already called on line 227!
+
+  - description: "Example of mock complexity in clip tests (AP-011)"
+    file: tests/test_clips.py
+    snippet: |
+      # 5 levels of nested context managers with manual mock Path classes
+      with patch("app.services.clip_service.shutil.which") as mock_which, \
+           patch("app.services.clip_service.asyncio.create_subprocess_exec") as mock_subproc:
+          mock_which.side_effect = lambda cmd: {...}
+          mock_ffprobe_proc = AsyncMock()
+          mock_ffprobe_proc.communicate = AsyncMock(return_value=(b"60.0\n", b""))
+          mock_subproc.side_effect = [mock_ffprobe_proc, mock_ffmpeg_proc]
+          with patch("app.services.clip_service.file_service.get_video_path") as mock_get_path, \
+               patch("app.services.clip_service.file_service.generate_thumbnail", AsyncMock(return_value=True)):
+              # Manual Path mock objects with inline class definitions
+              mock_src_path = type("Path", (), {"exists": lambda self: True, "stat": ...})()
+              mock_clip_path = type("Path", (), {"exists": lambda self: True, "unlink": lambda self: None})()
+
+anti_examples:
+  - description: "Do NOT add more code that duplicates existing helpers"
+    snippet: |
+      # BAD — another place reimplementing _get_i18n
+      def get_i18n_for_this_module(request):
+          return getattr(request.state, "i18n", get_i18n_context(DEFAULT_LANG))
+
+  - description: "Do NOT add more hardcoded IDs in tests"
+    snippet: 'assert response.json()["id"] == 1  # BAD — use the value from the response instead'

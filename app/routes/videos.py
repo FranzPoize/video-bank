@@ -15,8 +15,14 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from app.database import get_db
 from app.services import clip_service, tag_service, video_service
-from app.services.file_service import get_available_space, get_video_path
-from app.templates import templates, DEFAULT_LANG, LANG_FLAGS, get_i18n, get_i18n_context
+from app.services.file_service import THUMBNAIL_EXT, get_available_space, get_video_path
+from app.templates import (
+    DEFAULT_LANG,
+    LANG_FLAGS,
+    get_i18n,
+    get_i18n_context,
+    templates,
+)
 
 router = APIRouter()
 
@@ -31,13 +37,15 @@ def _video_to_card(video: dict) -> dict:
         Path(__file__).resolve().parent.parent.parent
         / "uploads"
         / "thumbnails"
-        / f"{thumb_stem}.jpg"
+        / f"{thumb_stem}.{THUMBNAIL_EXT}"
     )
     has_thumbnail = thumb_path.exists()
     return {
         **video,
         "has_thumbnail": has_thumbnail,
-        "thumbnail_url": f"/uploads/thumbnails/{thumb_stem}.jpg" if has_thumbnail else None,
+        "thumbnail_url": f"/uploads/thumbnails/{thumb_stem}.{THUMBNAIL_EXT}"
+        if has_thumbnail
+        else None,
     }
 
 
@@ -51,7 +59,8 @@ async def space_indicator(request: Request):
     i18n = get_i18n(request)
     space = get_available_space()
     return templates.TemplateResponse(
-        request, "_space_fragment.html",
+        request,
+        "_space_fragment.html",
         {
             **i18n,
             "space": space,
@@ -123,7 +132,8 @@ async def list_videos(
     template = "_content.html" if is_htmx else "index.html"
 
     return templates.TemplateResponse(
-        request, template,
+        request,
+        template,
         {
             **i18n,
             "videos": enriched,
@@ -138,7 +148,8 @@ async def upload_form(request: Request):
     """Show the upload form."""
     i18n = get_i18n(request)
     return templates.TemplateResponse(
-        request, "upload.html",
+        request,
+        "upload.html",
         {**i18n},
     )
 
@@ -175,7 +186,8 @@ async def create_video(
         if request.headers.get("x-requested-with") == "XMLHttpRequest":
             return JSONResponse({"error": str(e)}, status_code=400)
         return templates.TemplateResponse(
-            request, "upload.html",
+            request,
+            "upload.html",
             {
                 **i18n,
                 "error": str(e),
@@ -220,7 +232,8 @@ async def video_detail(request: Request, video_id: int, db=Depends(get_db)):
     enriched["video_url"] = f"/api/videos/{video_id}/file"
 
     return templates.TemplateResponse(
-        request, "video_detail.html",
+        request,
+        "video_detail.html",
         {
             **i18n,
             "video": enriched,
@@ -237,7 +250,8 @@ async def edit_video_form(request: Request, video_id: int, db=Depends(get_db)):
         raise HTTPException(status_code=404, detail="Video not found")
 
     return templates.TemplateResponse(
-        request, "edit.html",
+        request,
+        "edit.html",
         {
             **i18n,
             "video": video,
@@ -289,7 +303,8 @@ async def clip_form(request: Request, video_id: int, db=Depends(get_db)):
     enriched["video_url"] = f"/api/videos/{video_id}/file"
 
     return templates.TemplateResponse(
-        request, "clip.html",
+        request,
+        "clip.html",
         {
             **i18n,
             "video": enriched,

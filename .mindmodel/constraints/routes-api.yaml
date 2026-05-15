@@ -1,0 +1,98 @@
+# Route Handler and API Patterns
+# Applies to: all files in app/routes/
+
+id: routes-api
+description: Patterns and conventions for FastAPI route handlers including URL naming, template rendering, and HTMX integration.
+
+rules:
+  - "Route handler signature: (request: Request, ..., db=Depends(get_db)) — i18n first, db last"
+  - "Always call _get_i18n(request) at the top of routes that render templates"
+  - "Route pattern: get i18n context → call service → check for None (raise 404) → enrich data → return TemplateResponse"
+  - "Use router = APIRouter() at module level, register in main.py with app.include_router()"
+  - "TemplateResponse always spreads **i18n into context dict"
+  - "HTMX-aware routes: check HX-Request header to choose full template vs fragment"
+  - "Redirect after POST using status_code=303 (RedirectResponse)"
+  - "Use plural nouns for list endpoints (/api/videos), singular for detail (/api/video/{id}) — known inconsistency, but document it"
+  - "Form data for simple POSTs, JSON body for API-style POSTs (clip creation)"
+  - "File uploads via UploadFile + Form(...) for metadata"
+
+examples:
+  - description: "Standard route handler — i18n first, service call, None check, TemplateResponse"
+    file: app/routes/videos.py
+    snippet: |
+      @router.get("/video/{video_id}")
+      async def video_detail(request: Request, video_id: int, db=Depends(get_db)):
+          """Show video detail page with player and tags."""
+          i18n = _get_i18n(request)
+          video = await video_service.get_video_with_tags(db, video_id)
+          if video is None:
+              raise HTTPException(status_code=404, detail="Video not found")
+
+          enriched = _video_to_card(video)
+          enriched["video_url"] = f"/api/video/{video_id}/file"
+
+          return templates.TemplateResponse(
+              request, "video_detail.html",
+              {**i18n, "video": enriched},
+          )
+
+  - description: "HTMX-aware route — returns fragment or full page based on header"
+    file: app/routes/videos.py
+    snippet: |
+      @router.get("/")
+      async def list_videos(
+          request: Request,
+          tag_id: int | None = None,
+          db=Depends(get_db),
+      ):
+          i18n = _get_i18n(request)
+          if tag_id is not None:
+              videos = await video_service.list_videos_by_tag(db, tag_id)
+          else:
+              videos = await video_service.list_videos_with_tags(db)
+          enriched = [_video_to_card(v) for v in videos]
+
+          is_htmx = request.headers.get("HX-Request") == "true"
+          template = "_content.html" if is_htmx else "index.html"
+
+          return templates.TemplateResponse(
+              request, template,
+              {**i18n, "videos": enriched, "all_tags": all_tags, "active_tag_id": tag_id},
+          )
+
+  - description: "POST handler with redirect and i18n error handling"
+    file: app/routes/videos.py
+    snippet: |
+      @router.post("/api/videos")
+      async def create_video(
+          request: Request,
+          name: str = Form(...),
+          file: UploadFile = File(...),
+          tags: str = Form(""),
+          db=Depends(get_db),
+      ):
+          i18n = _get_i18n(request)
+          content = await file.read()
+          try:
+              video = await video_service.create_video(db, name=name, ...)
+          except ValueError as e:
+              if request.headers.get("x-requested-with") == "XMLHttpRequest":
+                  return JSONResponse({"error": str(e)}, status_code=400)
+              return templates.TemplateResponse(request, "upload.html", {**i18n, "error": str(e)}, status_code=400)
+          return RedirectResponse(url="/", status_code=303)
+
+known_issues:
+  - "URL inconsistency: /api/videos (plural) vs /api/video/{id} (singular) — kept for backward compatibility"
+  - "_get_i18n() helper is duplicated in videos.py and tags.py — should be refactored to templates.py"
+
+anti_examples:
+  - description: "Do NOT use status_code=302 for POST redirects — use 303"
+    snippet: 'return RedirectResponse(url="/", status_code=302)  # BAD — use 303 for POST/redirect/GET'
+
+  - description: "Do NOT return TemplateResponse without spreading i18n"
+    snippet: 'return templates.TemplateResponse(request, "index.html", {"videos": videos})  # BAD — missing **i18n'
+
+  - description: "Do NOT call service without checking for None return"
+    snippet: |
+      video = await video_service.get_video(db, video_id)
+      return templates.TemplateResponse(request, "detail.html", {"video": video})  # BAD — video might be None

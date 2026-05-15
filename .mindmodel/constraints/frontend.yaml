@@ -1,0 +1,115 @@
+# Frontend Patterns — HTMX, Jinja2 Templates, CSS, JS
+# Applies to: app/templates/, app/static/js/, CSS inline in base.html
+
+id: frontend
+description: Frontend conventions for the Jinja2 + HTMX + vanilla JS stack.
+
+rules:
+  - Templates extend base.html via {% extends "base.html" %} for full pages
+  - Template fragments for HTMX partials are prefixed with _ (e.g., _content.html, _video_grid.html)
+  - HTMX fragments use hx-get, hx-post, hx-target="#target-id", hx-swap="outerHTML"
+  - HTMX navigation uses hx-push-url="true" for URL history support
+  - HTMX redirects use HX-Redirect response header (not JS-based)
+  - AJAX uploads use X-Requested-With: XMLHttpRequest header for route differentiation
+  - JS is vanilla (no framework) — all code in /static/js/*.js as IIFE modules
+  - CSS is currently inline in base.html <style> block (known limitation)
+  - CSS uses kebab-case class names with BEM-lite prefixes: .seeker-controls, .lang-dropdown, .space-ok
+  - Responsive breakpoints: 768px (tablet), 480px (mobile)
+  - "Use Jinja2 block names: {% block title %}, {% block content %}, {% block extra_head %}"
+  - Upload popup in _upload_popup.html is included in base.html for persistence across navigations
+  - sessionStorage is used for persisting upload state across page navigations
+
+examples:
+  - description: "Base template with HTMX, i18n, language switcher"
+    file: app/templates/base.html
+    snippet: |
+      <!DOCTYPE html>
+      <html lang="{{ current_lang }}">
+      <head>
+          <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+          <!-- CSS inline in <style> block -->
+      </head>
+      <body>
+          <nav>
+              <a href="/">{{ _("nav.video_bank") }}</a>
+              <a href="/upload">{{ _("nav.upload") }}</a>
+              <a href="/settings">{{ _("nav.settings") }}</a>
+              <span id="space-indicator" hx-get="/api/space" hx-trigger="load"></span>
+              <!-- Language dropdown with HTMX -->
+              <div class="lang-dropdown">
+                  <a hx-post="/api/lang" hx-vals='{"lang": "fr"}' hx-target="body">
+                      {{ _("lang.fr") }}
+                  </a>
+              </div>
+          </nav>
+          <div class="container">{% block content %}{% endblock %}</div>
+          {% include "_upload_popup.html" %}
+      </body>
+      </html>
+
+  - description: "HTMX fragment — filter bar with hx-get for partial page updates"
+    file: app/templates/_content.html
+    snippet: |
+      <div id="main-content">
+          <a href="/"
+             class="btn btn-sm {% if active_tag_id is none %}btn-primary{% else %}btn-inactive{% endif %}"
+             hx-get="/"
+             hx-target="#main-content"
+             hx-swap="outerHTML"
+             hx-push-url="true">
+              {{ _("filter.all") }}
+          </a>
+          {% for tag in all_tags %}
+          <a href="/?tag_id={{ tag.id }}"
+             class="btn btn-sm"
+             hx-get="/?tag_id={{ tag.id }}"
+             hx-target="#main-content"
+             hx-swap="outerHTML"
+             hx-push-url="true">
+              {{ tag.name }}
+          </a>
+          {% endfor %}
+      </div>
+
+  - description: "CSS class naming — kebab-case, BEM-lite"
+    file: app/templates/base.html (inline styles)
+    snippet: |
+      .space-ok { color: #2d6a4f; background: #d8f3dc; }
+      .space-warn { color: #936639; background: #fff3cd; }
+      .space-critical { color: #e63946; background: #ffe5e7; }
+      .btn-primary { background: #4361ee; color: #fff; }
+      .btn-danger { background: #e63946; color: #fff; }
+      .seeker-controls { padding: 1rem; background: #fff; }
+      .lang-dropdown { position: relative; }
+      .lang-menu { position: absolute; }
+
+  - description: "Responsive breakpoints in CSS"
+    file: app/templates/base.html
+    snippet: |
+      @media (max-width: 768px) {
+          .container { padding: 1rem; }
+          nav { padding: 0.75rem 1rem; gap: 1rem; }
+          .page-header { flex-direction: column; }
+          .video-player video { max-height: 50vh; }
+      }
+      @media (max-width: 480px) {
+          .container { padding: 0.75rem; }
+          nav { padding: 0.5rem 0.75rem; }
+      }
+
+  - description: "Template inheritance with blocks"
+    file: app/templates/index.html
+    snippet: |
+      {% extends "base.html" %}
+      {% block title %}{{ _("page.videos") }} — {{ _("nav.video_bank") }}{% endblock %}
+      {% block content %}
+      <h1 style="margin-bottom: 1.5rem;">{{ _("page.videos") }}</h1>
+      {% include "_content.html" %}
+      {% endblock %}
+
+anti_examples:
+  - description: "Do NOT use # id selectors in CSS — use .class selectors"
+    snippet: "#upload-form { margin: 0; }  # BAD — prefer .upload-form or use the element"
+
+  - description: "Do NOT define full pages as fragments — fragments start with _"
+    snippet: '<!-- BAD: fragment without _ prefix --> <div id="main-content">...</div>  # Should be _content.html'

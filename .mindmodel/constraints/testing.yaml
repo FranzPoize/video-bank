@@ -1,0 +1,126 @@
+# Testing Patterns
+# Applies to: all files in tests/
+
+id: testing
+description: Testing conventions using pytest with async support, fixtures, and mocking.
+
+rules:
+  - "Group tests into test classes: class TestFeature: for logical grouping"
+  - Use @pytest.mark.asyncio on every async test method
+  - "Use class-based fixtures from conftest.py: db (in-memory SQLite) and client (httpx.AsyncClient)"
+  - "Test function name must describe the scenario: test_upload_success, test_video_detail_not_found"
+  - Add a docstring to every test describing what is being tested
+  - Use assert with descriptive messages where possible
+  - Use unittest.mock.patch for mocking external calls (ffmpeg, shutil.disk_usage)
+  - Test the public API through client endpoints (integration style)
+  - Test service functions directly with the db fixture for unit-level tests
+  - Use caplog fixture for testing logging output
+  - Use app.dependency_overrides to swap the DB dependency for testing
+  - Conftest provides: db (in-memory aiosqlite connection) + client (httpx.AsyncClient with DB override)
+  - Always clean up dependency_overrides in client fixture teardown: .clear()
+
+examples:
+  - description: "Standard test class with async tests using client fixture"
+    file: tests/test_videos.py
+    snippet: |
+      class TestVideoUpload:
+          """Tests for the upload endpoint."""
+
+          @pytest.mark.asyncio
+          async def test_upload_success(self, client):
+              """POST /api/videos with valid data redirects to list."""
+              response = await client.post(
+                  "/api/videos",
+                  data={"name": "My Clip"},
+                  files={"file": ("clip.mp4", b"fake-video-content", "video/mp4")},
+              )
+              assert response.status_code == 303
+              assert response.headers["location"] == "/"
+
+          @pytest.mark.asyncio
+          async def test_upload_creates_db_record(self, client, db):
+              """Upload inserts a row into the database."""
+              await client.post(
+                  "/api/videos",
+                  data={"name": "DB Test"},
+                  files={"file": ("db.mp4", b"some-content", "video/mp4")},
+              )
+              cursor = await db.execute("SELECT COUNT(*) as cnt FROM videos")
+              row = await cursor.fetchone()
+              assert row["cnt"] == 1
+
+  - description: "Mocking external subprocess calls with patching"
+    file: tests/test_clips.py
+    snippet: |
+      @pytest.mark.asyncio
+      async def test_clip_creates_db_record(self, client, db):
+          """Successful clip creation inserts a DB record with source_video_id."""
+          # Upload source first
+          await client.post("/api/videos", ..., files={"file": ("src.mp4", ...)})
+
+          with patch("app.services.clip_service.shutil.which") as mock_which, \
+               patch("app.services.clip_service.asyncio.create_subprocess_exec") as mock_subproc:
+              mock_which.side_effect = lambda cmd: {"ffprobe": "/usr/bin/ffprobe", "ffmpeg": "/usr/bin/ffmpeg"}.get(cmd)
+              mock_ffprobe_proc = AsyncMock()
+              mock_ffprobe_proc.returncode = 0
+              mock_ffprobe_proc.communicate = AsyncMock(return_value=(b"60.0\n", b""))
+              # ...
+              response = await client.post("/api/video/1/clip", ...)
+          assert response.status_code == 200
+
+  - description: "Testing logging with caplog fixture"
+    file: tests/test_logging.py
+    snippet: |
+      class TestVideoServiceLogging:
+          @pytest.mark.asyncio
+          async def test_upload_rejected_logs_warning(self, client, caplog):
+              caplog.set_level("WARNING")
+              response = await client.post(
+                  "/api/videos",
+                  data={"name": "Bad Format"},
+                  files={"file": ("bad.avi", b"content", "video/x-msvideo")},
+              )
+              assert response.status_code == 400
+              warning_logs = [r for r in caplog.records if "Upload rejected" in r.getMessage()]
+              assert len(warning_logs) >= 1
+              assert warning_logs[0].levelname == "WARNING"
+
+  - description: "Conftest fixtures — in-memory DB and httpx client"
+    file: tests/conftest.py
+    snippet: |
+      @pytest_asyncio.fixture
+      async def db() -> AsyncGenerator[aiosqlite.Connection, None]:
+          db_conn = await aiosqlite.connect(":memory:")
+          await db_conn.execute("PRAGMA foreign_keys = ON")
+          db_conn.row_factory = aiosqlite.Row
+          from app.database import MIGRATIONS
+          for version in range(1, 5):
+              for stmt in MIGRATIONS.get(version, []):
+                  await db_conn.execute(stmt)
+          await db_conn.commit()
+          try:
+              yield db_conn
+          finally:
+              await db_conn.close()
+
+      @pytest_asyncio.fixture
+      async def client(db) -> AsyncGenerator[AsyncClient, None]:
+          _app.dependency_overrides[get_db] = lambda: db
+          transport = ASGITransport(app=_app)
+          async with AsyncClient(transport=transport, base_url="http://test") as ac:
+              yield ac
+          _app.dependency_overrides.clear()
+
+anti_examples:
+  - description: "Do NOT use hardcoded IDs that assume specific DB state"
+    snippet: |
+      response = await client.get("/video/1")  # BAD — assumes video with id=1 exists
+      # Use upload + verify workflow instead
+
+  - description: "Do NOT mock too broadly — mock at the right level"
+    snippet: |
+      # BAD: Mocking the entire DB to test a service function
+      with patch("app.services.video_service.db", mock_db):
+          ...
+      # GOOD: Use the in-memory db fixture and pass it directly
+      result = await video_service.get_video(db, 1)

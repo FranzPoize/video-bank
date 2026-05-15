@@ -1,0 +1,106 @@
+# Deployment and Infrastructure
+# Applies to: video-bank.service, logrotate.conf, setup.sh, environment configuration
+
+id: deployment
+description: Ubuntu systemd deployment, log management, and environment configuration.
+
+rules:
+  - Single-process monolith — no Docker, no containerization
+  - Run via systemd service using uvicorn ASGI server
+  - Service runs as ubuntu:ubuntu user
+  - Working directory is the project root (/home/ubuntu/video-bank)
+  - Python environment uses venv at project root (/home/ubuntu/video-bank/venv/)
+  - Application listens on port 4322, host 0.0.0.0
+  - Logs are written to /opt/video-bank/logs/ (separate from project tree)
+  - Log rotation via logrotate: daily, 30 days retention, compressed, copytruncate
+  - Database at /home/ubuntu/video-bank/data/video_bank.db (configurable via DATABASE_PATH)
+  - Allowed extensions: mp4, webm, mov (configurable via ALLOWED_EXTENSIONS)
+  - Max upload size: 2GB (configurable via MAX_UPLOAD_SIZE)
+  - No CI pipeline (known limitation)
+  - No .env file support — environment variables set in systemd service file or shell
+  - HTMX loaded from CDN (unpkg.com) — no bundling, no npm
+
+examples:
+  - description: "systemd service unit file"
+    file: video-bank.service
+    snippet: |
+      [Unit]
+      Description=Video Bank — self-hosted video clip manager
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=ubuntu
+      Group=ubuntu
+      WorkingDirectory=/home/ubuntu/video-bank
+      Environment="DATABASE_PATH=/home/ubuntu/video-bank/data/video_bank.db"
+      Environment="ALLOWED_EXTENSIONS=mp4,webm,mov"
+      Environment="LOG_DIR=/opt/video-bank/logs"
+      ExecStartPre=mkdir -p /opt/video-bank/logs
+      ExecStartPre=chown ubuntu:ubuntu /opt/video-bank/logs
+      ExecStart=/home/ubuntu/video-bank/venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 4322
+      Restart=always
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - description: "logrotate configuration"
+    file: logrotate.conf
+    snippet: |
+      /opt/video-bank/logs/*.log {
+          daily
+          rotate 30
+          compress
+          missingok
+          notifempty
+          copytruncate
+          dateext
+      }
+
+  - description: "Application dependencies"
+    file: requirements.txt
+    snippet: |
+      fastapi>=0.110.0
+      uvicorn[standard]>=0.29.0
+      jinja2>=3.1.0
+      aiosqlite>=0.20.0
+      python-multipart>=0.0.9
+      pytest>=8.0.0
+      pytest-asyncio>=0.24.0
+      httpx>=0.27.0
+
+  - description: "Path resolution for uploads and DB (production and dev)"
+    file: app/database.py
+    snippet: |
+      DEFAULT_DB_PATH = os.environ.get(
+          "DATABASE_PATH",
+          os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "video_bank.db"),
+      )
+
+  - description: "Startup logging — ffmpeg check and DB path"
+    file: app/main.py
+    snippet: |
+      @app.on_event("startup")
+      async def on_startup():
+          if "PYTEST_CURRENT_TEST" not in os.environ:
+              os.makedirs(LOG_DIR, exist_ok=True)
+              logging.basicConfig(filename=LOG_FILE, format=LOG_FORMAT, ...)
+          await init_db(migration_version=4)
+          ffmpeg_path = shutil.which("ffmpeg")
+          if ffmpeg_path is None:
+              logging.warning("ffmpeg not found. Install with: sudo apt install ffmpeg.")
+
+known_limitations:
+  - "No Docker image — bare-metal systemd deployment only"
+  - "No CI/CD pipeline — manual deploy via git pull + systemctl restart"
+  - "No .env file support — environment vars set in systemd unit"
+  - "HTMX from unpkg.com CDN — no fallback if CDN is down"
+  - "All CSS inline in base.html — no external CSS file"
+
+anti_examples:
+  - description: "Do NOT use Docker for this project — it's a systemd-deployed monolith"
+    snippet: 'FROM python:3.12  # BAD — this project does not use Docker'
+
+  - description: "Do NOT use npm/webpack/bundlers — HTMX from CDN, vanilla JS"
+    snippet: 'npm install htmx  # BAD — HTMX is loaded from unpkg.com CDN'

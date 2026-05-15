@@ -1,0 +1,124 @@
+# File I/O and Storage Patterns
+# Applies to: app/services/file_service.py, routes that access file paths
+
+id: file-io
+description: File storage conventions — naming, path resolution, disk space management, and thumbnail generation.
+
+rules:
+  - Stored filenames use UUID: f"{uuid.uuid4().hex}.{ext}" for uniqueness and to avoid collisions
+  - Clip filenames follow pattern: clip_{stem}_{start}_{end}_{short_uuid}.{ext}
+  - Always check path.exists() before deleting files (no-op if missing)
+  - Use Path from pathlib for path manipulation — never os.path.join for new code
+  - Disk space guard: reject upload if projected usage > 95% capacity
+  - Thumbnails are .webp format stored in uploads/thumbnails/ with matching stem
+  - Thumbnail generation is best-effort — failures degrade gracefully (return False)
+  - External tools (ffmpeg) are checked via shutil.which before use — graceful degradation when missing
+  - Verify file creation after ffmpeg operations (confirm output file exists)
+  - Clean up partial output files on failure (clip_path.unlink() on exception)
+
+storage_structure:
+  - path: "uploads/videos/"
+    content: "Video files named {uuid}.{ext} and clip_{stem}_{start}_{end}_{short_uuid}.{ext}"
+  - path: "uploads/thumbnails/"
+    content: "Thumbnail images named {stem}.webp"
+  - name: "ALLOWED_EXTENSIONS"
+    default: "mp4,webm,mov"
+  - name: "MAX_UPLOAD_SIZE"
+    default: "2147483648 (2GB)"
+
+examples:
+  - description: "UUID-based filenames for stored uploads"
+    file: app/services/file_service.py
+    snippet: |
+      async def save_upload(file_content: bytes, original_name: str) -> str:
+          _ensure_dirs()
+          ext = _get_ext(original_name)
+          stored_name = f"{uuid.uuid4().hex}.{ext}"
+          dest = VIDEOS_DIR / stored_name
+          with open(dest, "wb") as f:
+              f.write(file_content)
+          logger.info("File saved: %s (%d bytes)", stored_name, len(file_content))
+          return stored_name
+
+  - description: "Clip filename generation with readable format"
+    file: app/services/clip_service.py
+    snippet: |
+      def _generate_clip_filename(source_filename: str, start: float, end: float) -> str:
+          ext = Path(source_filename).suffix
+          stem = Path(source_filename).stem
+          short_id = uuid.uuid4().hex[:8]
+          start_str = f"{start:.1f}".replace(".", "_")
+          end_str = f"{end:.1f}".replace(".", "_")
+          return f"clip_{stem}_{start_str}_{end_str}_{short_id}{ext}"
+
+  - description: "Safe delete with exists() guard"
+    file: app/services/file_service.py
+    snippet: |
+      async def delete_video_file(filename: str):
+          """Remove a stored video file from disk. No-op if missing."""
+          path = VIDEOS_DIR / filename
+          if path.exists():
+              path.unlink()
+
+      async def delete_thumbnail(filename: str):
+          """Remove a stored thumbnail from disk. No-op if missing."""
+          thumb = THUMBNAILS_DIR / f"{Path(filename).stem}.jpg"
+          if thumb.exists():
+              thumb.unlink()
+
+  - description: "Disk space guard during upload"
+    file: app/services/file_service.py
+    snippet: |
+      space = get_available_space()
+      if not space.get("error"):
+          projected = (space["used"] + file_size) / space["total"]
+          if projected > 0.95:
+              return "Not enough disk space (would exceed 95% capacity)."
+          if projected > 0.80:
+              logger.warning("Disk near capacity: %.1f%% used (projected: %.1f%%)",
+                             space["percent_used"] * 100, projected * 100)
+
+  - description: "Best-effort ffmpeg thumbnail generation with graceful degradation"
+    file: app/services/file_service.py
+    snippet: |
+      async def generate_thumbnail(video_filename: str) -> bool:
+          _ensure_dirs()
+          video_path = VIDEOS_DIR / video_filename
+          thumb_path = THUMBNAILS_DIR / f"{Path(video_filename).stem}.webp"
+          if thumb_path.exists():
+              return True
+          ffmpeg = shutil.which("ffmpeg")
+          if ffmpeg is None:
+              return False
+          proc = await asyncio.create_subprocess_exec(
+              ffmpeg, "-y", "-ss", str(THUMBNAIL_TIME_SECONDS), "-i", str(video_path),
+              "-vframes", "1", "-q:v", "2", str(thumb_path),
+              stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+          )
+          return_code = await proc.wait()
+          return return_code == 0 and thumb_path.exists()
+
+  - description: "Clean up partial output on failure"
+    file: app/services/clip_service.py
+    snippet: |
+      if proc.returncode != 0:
+          error_msg = stderr.decode().strip() if stderr else "Unknown ffmpeg error"
+          if clip_path.exists():
+              clip_path.unlink()
+          logger.error("ffmpeg failed for clip from video %d: %s", source_video_id, error_msg)
+          raise RuntimeError(f"ffmpeg failed: {error_msg}")
+
+anti_examples:
+  - description: "Do NOT use predictable filenames (like original_name) for storage"
+    snippet: |
+      stored_name = original_name  # BAD — collision risk, use UUID
+      with open(VIDEOS_DIR / stored_name, "wb") as f:
+          f.write(content)
+
+  - description: "Do NOT assume ffmpeg is available — always check with shutil.which"
+    snippet: |
+      proc = await asyncio.create_subprocess_exec("ffmpeg", ...)  # BAD — will crash if ffmpeg not found
+      # GOOD: check first
+      ffmpeg = shutil.which("ffmpeg")
+      if ffmpeg is None:
+          return False  # or raise RuntimeError

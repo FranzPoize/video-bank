@@ -22,6 +22,8 @@ ALLOWED_EXTENSIONS = {
 }
 MAX_UPLOAD_SIZE = int(os.environ.get("MAX_UPLOAD_SIZE", str(2048 * 1024 * 1024)))  # 2GB
 THUMBNAIL_TIME_SECONDS = int(os.environ.get("THUMBNAIL_TIME", "1"))
+THUMBNAIL_RESOLUTION = "512x288"
+THUMBNAIL_EXT = "webp"
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +122,7 @@ async def generate_thumbnail(video_filename: str) -> bool:
     """
     _ensure_dirs()
     video_path = VIDEOS_DIR / video_filename
-    thumb_path = THUMBNAILS_DIR / f"{Path(video_filename).stem}.webp"
+    thumb_path = THUMBNAILS_DIR / f"{Path(video_filename).stem}.{THUMBNAIL_EXT}"
 
     if thumb_path.exists():
         return True  # Already generated
@@ -139,7 +141,11 @@ async def generate_thumbnail(video_filename: str) -> bool:
         "-vframes",
         "1",
         "-q:v",
-        "2",
+        "85",
+        "-sws_flags",
+        "lanczos",
+        "-s",
+        THUMBNAIL_RESOLUTION,
         str(thumb_path),
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.DEVNULL,

@@ -1,0 +1,95 @@
+# Service Layer Patterns
+# Applies to: all files in app/services/
+
+id: services
+description: Conventions for the service layer — business logic functions that sit between routes and the database/filesystem.
+
+rules:
+  - "Every service function takes aiosqlite.Connection as the FIRST argument (named db)"
+  - "Service functions do NOT import or use Depends(get_db) — that's the route's responsibility"
+  - "Every function must have a docstring describing its purpose and return value"
+  - "Use cursor = await db.execute(...) then await cursor.fetchone() / await cursor.fetchall() for queries"
+  - "Convert rows to dict: dict(row) for single row, [dict(r) for r in rows] for lists"
+  - "Return dict | None for single-record lookups (caller handles None)"
+  - "Return list[dict] for multi-record queries"
+  - "Keep transaction logic (commit/rollback) within the service function"
+  - "Raise ValueError for validation errors, RuntimeError for infrastructure errors"
+  - "Use module-level logger for significant events (creations, deletions, errors)"
+  - "Private helpers prefixed with _ are in the same file"
+
+examples:
+  - description: "Standard service function — db first arg, docstring, cursor.execute, dict(row) return"
+    file: app/services/video_service.py
+    snippet: |
+      async def get_video(db, video_id: int) -> dict | None:
+          """Fetch a single video by ID. Returns None if not found."""
+          cursor = await db.execute("SELECT * FROM videos WHERE id = ?", (video_id,))
+          row = await cursor.fetchone()
+          if row is None:
+              return None
+          return dict(row)
+
+  - description: "Service function with writes — commit after DB changes"
+    file: app/services/tag_service.py
+    snippet: |
+      async def set_video_tags(db, video_id: int, tag_names: list[str]):
+          """Replace all tags on a video with the given list.
+
+          Tags that don't exist yet are created on the fly.
+          """
+          await db.execute("DELETE FROM video_tags WHERE video_id = ?", (video_id,))
+          for name in tag_names:
+              name = name.strip().lower()
+              if not name:
+                  continue
+              tag_id = await get_or_create_tag(db, name)
+              await db.execute(
+                  "INSERT OR IGNORE INTO video_tags (video_id, tag_id) VALUES (?, ?)",
+                  (video_id, tag_id),
+              )
+          await db.commit()
+
+  - description: "Service function with transaction rollback on failure"
+    file: app/services/clip_service.py
+    snippet: |
+      try:
+          cursor = await db.execute(
+              """INSERT INTO videos (...) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", (...)
+          )
+          clip_id = cursor.lastrowid
+          source_tags = await tag_service.get_video_tags(db, source_video_id)
+          if source_tags:
+              await tag_service.set_video_tags(db, clip_id, source_tags)
+          await db.commit()
+      except Exception:
+          await db.rollback()
+          if clip_path.exists():
+              clip_path.unlink()
+          raise
+
+  - description: "Service function with logger — %s formatting"
+    file: app/services/video_service.py
+    snippet: |
+      async def delete_video(db, video_id: int) -> bool:
+          video = await get_video(db, video_id)
+          if video is None:
+              return False
+          await file_service.delete_video_file(video["filename"])
+          await file_service.delete_thumbnail(video["filename"])
+          await db.execute("DELETE FROM videos WHERE id = ?", (video_id,))
+          await db.commit()
+          logger.info("Video deleted: id=%d, filename=%s", video_id, video["filename"])
+          return True
+
+anti_examples:
+  - description: "Do NOT use Depends(get_db) in service functions"
+    snippet: |
+      async def get_video(video_id: int, db=Depends(get_db)):  # BAD — services receive db as argument
+          ...
+
+  - description: "Do NOT catch all exceptions silently"
+    snippet: |
+      try:
+          result = await db.execute(...)
+      except Exception:
+          pass  # BAD — at minimum log the error

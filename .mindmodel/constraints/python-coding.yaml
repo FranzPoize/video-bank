@@ -1,0 +1,89 @@
+# Python Coding Conventions
+# Applies to: all .py files in app/ and tests/
+
+id: python-coding
+description: Naming, imports, and structural conventions for Python code in this project.
+
+rules:
+  - Use snake_case for all function names, variable names, and module names
+  - Use PascalCase for class names
+  - Use UPPER_SNAKE_CASE for module-level constants
+  - One public class/function per module, with supporting private helpers prefixed with _
+  - One module per file — no monolithic files
+  - Group imports: stdlib → third-party → local (separated by blank lines)
+  - Use full app.xxx path for local imports — never relative imports
+  - No `from module import *` wildcard imports
+  - All files must have a docstring describing the module's purpose
+  - Use async def for I/O-bound functions, def for pure computation
+  - Module-level logger via `logger = logging.getLogger(__name__)`
+  - Log with %s formatting, NOT f-strings
+
+examples:
+  - description: "Video service module — proper import groups, module docstring, snake_case functions"
+    file: app/services/video_service.py
+    snippet: |
+      """
+      Business logic for video CRUD operations.
+
+      Each function takes an aiosqlite.Connection as the first argument.
+      This keeps them testable with in-memory databases.
+      """
+
+      import logging
+
+      from app.services import file_service, tag_service
+
+      logger = logging.getLogger(__name__)
+
+
+      async def create_video(
+          db,
+          name: str,
+          file_content: bytes,
+          original_name: str,
+          mime_type: str,
+          file_size: int,
+          tags: str = "",
+      ) -> dict:
+          """Save a video file and create a database record."""
+          error = file_service.validate_file(original_name, file_size)
+          if error:
+              logger.warning("Upload rejected (%s): %s", original_name, error)
+              raise ValueError(error)
+          # ...
+
+  - description: "Constants module pattern with UPPER_SNAKE_CASE"
+    file: app/services/file_service.py
+    snippet: |
+      UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
+      VIDEOS_DIR = UPLOAD_DIR / "videos"
+      THUMBNAILS_DIR = UPLOAD_DIR / "thumbnails"
+
+      ALLOWED_EXTENSIONS = {
+          e.strip() for e in os.environ.get("ALLOWED_EXTENSIONS", "mp4,webm,mov").split(",")
+      }
+      MAX_UPLOAD_SIZE = int(os.environ.get("MAX_UPLOAD_SIZE", str(2048 * 1024 * 1024)))
+      THUMBNAIL_TIME_SECONDS = int(os.environ.get("THUMBNAIL_TIME", "1"))
+
+  - description: "Private helper function prefixed with _"
+    file: app/services/clip_service.py
+    snippet: |
+      def _validate_times(start: float, end: float, duration: float | None):
+          """Validate clip time bounds. Raises ValueError with a user-facing message."""
+          if start < 0:
+              raise ValueError("Start time must be non-negative.")
+          if end <= start:
+              raise ValueError("Start must be before end.")
+          if (end - start) < 1.0:
+              raise ValueError("Minimum clip duration is 1 second.")
+
+anti_examples:
+  - description: "Do NOT use f-strings in logger calls — use %s formatting"
+    file: app/services/file_service.py (anti-pattern)
+    snippet: 'logger.warning(f"Failed to get disk usage: {e}")  # BAD — use %s formatting like: "Failed to get disk usage: %s", e'
+
+  - description: "Do NOT use relative imports like from . import foo"
+    snippet: 'from . import video_service  # BAD — use from app.services import video_service instead'
+
+  - description: "Do NOT use wildcard imports"
+    snippet: 'from app.services import *  # BAD — no wildcard imports allowed'
