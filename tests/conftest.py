@@ -56,7 +56,7 @@ async def client(db) -> AsyncGenerator[AsyncClient, None]:
 
 
 @contextmanager
-def mock_ffmpeg(source_filename="src.mp4", duration=60.0, returncode=0):
+def mock_ffmpeg(source_filename="src.mp4", duration=60.0, returncode=0, has_audio=False):
     """Context manager that mocks ffmpeg/ffprobe for clip tests.
 
     Sets up:
@@ -69,6 +69,8 @@ def mock_ffmpeg(source_filename="src.mp4", duration=60.0, returncode=0):
         source_filename: The filename that triggers "source" path matching.
         duration: Duration in seconds that ffprobe returns.
         returncode: Return code for the ffmpeg subprocess (0 = success).
+        has_audio: When True, adds an extra ffprobe mock for
+                   ``_has_audio_stream`` (needed by cut_video).
 
     Yields:
         Tuple of (mock_which, mock_subproc) for additional assertions.
@@ -81,7 +83,7 @@ def mock_ffmpeg(source_filename="src.mp4", duration=60.0, returncode=0):
             "ffmpeg": "/usr/bin/ffmpeg",
         }.get(cmd)
 
-        # Mock ffprobe subprocess
+        # Mock ffprobe subprocess (duration)
         mock_ffprobe_proc = AsyncMock()
         mock_ffprobe_proc.returncode = 0
         mock_ffprobe_proc.communicate = AsyncMock(
@@ -93,7 +95,16 @@ def mock_ffmpeg(source_filename="src.mp4", duration=60.0, returncode=0):
         mock_ffmpeg_proc.returncode = returncode
         mock_ffmpeg_proc.communicate = AsyncMock(return_value=(b"", b"ffmpeg error output" if returncode != 0 else b""))
 
-        mock_subproc.side_effect = [mock_ffprobe_proc, mock_ffmpeg_proc]
+        # Build side_effect list — cut_video also calls _has_audio_stream
+        if has_audio:
+            mock_ffprobe_audio = AsyncMock()
+            mock_ffprobe_audio.returncode = 0
+            mock_ffprobe_audio.communicate = AsyncMock(
+                return_value=(b"audio\n", b"")
+            )
+            mock_subproc.side_effect = [mock_ffprobe_proc, mock_ffprobe_audio, mock_ffmpeg_proc]
+        else:
+            mock_subproc.side_effect = [mock_ffprobe_proc, mock_ffmpeg_proc]
 
         # Mock file paths
         with patch("app.services.clip_service.file_service.get_video_path") as mock_get_path, \

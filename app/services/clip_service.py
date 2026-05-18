@@ -70,6 +70,52 @@ def _generate_clip_filename(source_filename: str, start: float, end: float) -> s
     return f"clip_{stem}_{start_str}_{end_str}_{short_id}{ext}"
 
 
+# ── Helper: run ffmpeg subprocess ────────────────────────────────
+
+async def _run_ffmpeg(args: list[str]) -> bytes:
+    """Run ffmpeg with the given args.  Raises RuntimeError on failure.
+
+    The ``-y`` flag is prepended automatically.  *args* must **not**
+    contain the ffmpeg binary path (it is resolved via ``shutil.which``).
+    Returns stderr output for diagnostics.
+    """
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        raise RuntimeError("ffmpeg not found. Install with: sudo apt install ffmpeg")
+
+    proc = await asyncio.create_subprocess_exec(
+        ffmpeg, "-y", *args,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr = await proc.communicate()
+
+    if proc.returncode != 0:
+        error_msg = stderr.decode().strip() if stderr else "Unknown ffmpeg error"
+        raise RuntimeError(f"ffmpeg failed: {error_msg}")
+
+    return stderr
+
+
+async def _has_audio_stream(video_path: Path) -> bool:
+    """Return True if the video has at least one audio stream."""
+    ffprobe = shutil.which("ffprobe")
+    if ffprobe is None:
+        return False
+    proc = await asyncio.create_subprocess_exec(
+        ffprobe,
+        "-v", "error",
+        "-select_streams", "a:0",
+        "-show_entries", "stream=codec_type",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        str(video_path),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, _ = await proc.communicate()
+    return proc.returncode == 0 and stdout.decode().strip() == "audio"
+
+
 # ── Cut (in-place trim) ──────────────────────────────────────────
 
 async def cut_video(
@@ -80,18 +126,16 @@ async def cut_video(
 ) -> dict:
     """Remove the segment [start_time, end_time] from a video in-place.
 
-    Unlike create_clip (which extracts a segment into a new file), this
-    modifies the existing video file by dropping the selected range and
-    re-encoding. The DB record is updated with the new file size, and
-    the thumbnail is regenerated.
+    Uses one of three strategies depending on which edges are being cut:
 
-    Steps:
-    1. Fetch video metadata from DB
-    2. Validate time bounds
-    3. Run ffmpeg with select filter to drop the range
-    4. Replace original file with the trimmed version
-    5. Update DB record (file_size)
-    6. Regenerate thumbnail
+    * **Trim from end only** (start == 0): ``-c copy`` with ``-t``.
+    * **Trim from start only** (end == duration): ``-c copy`` with ``-ss``.
+    * **Cut a middle segment** (both edges): re-encode via the **trim+concat
+      filter**, which splits the video into two sections, drops the removed
+      range, and stitches the remainders together.
+
+    The DB record is updated with the new file size, and the thumbnail is
+    regenerated.
     """
     # 1. Fetch video
     video = await video_service.get_video(db, video_id)
@@ -99,8 +143,10 @@ async def cut_video(
         raise ValueError(f"Video with id {video_id} not found.")
 
     video_path = file_service.get_video_path(video["filename"])
+    ext = Path(video["filename"]).suffix
+    stem = Path(video["filename"]).stem
 
-    # 2. Validate times
+    # 2. Validate times and get duration
     duration = await _get_video_duration(video_path)
     _validate_times(start_time, end_time, duration)
 
@@ -108,61 +154,82 @@ async def cut_video(
     if start_time <= 0 and end_time >= (duration or 0):
         raise ValueError("Cannot remove the entire video.")
 
-    ffmpeg = shutil.which("ffmpeg")
-    if ffmpeg is None:
-        raise RuntimeError(
-            "ffmpeg not found. Install with: sudo apt install ffmpeg"
-        )
+    # Determine which segments to keep
+    has_before = start_time > 0
+    has_after = end_time < (duration or 0)
 
-    # Temp output file alongside the original
-    ext = Path(video["filename"]).suffix
-    stem = Path(video["filename"]).stem
     tmp_path = video_path.with_name(f"{stem}_cut_tmp{ext}")
 
     try:
-        # 3. Run ffmpeg — select frames outside [start, end), re-stamp PTS
-        proc = await asyncio.create_subprocess_exec(
-            ffmpeg,
-            "-y",
-            "-i", str(video_path),
-            "-vf", f"select='not(between(t,{start_time},{end_time}))',setpts=PTS-STARTPTS",
-            "-af", f"aselect='not(between(t,{start_time},{end_time}))',asetpts=PTS-STARTPTS",
-            "-map", "0:v:0",
-            "-map", "0:a:0?",
-            str(tmp_path),
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        _, stderr = await proc.communicate()
+        if has_before and has_after:
+            # ── Middle cut: re-encode via trim + concat filters ─────
+            has_audio = await _has_audio_stream(video_path)
 
-        if proc.returncode != 0:
-            error_msg = stderr.decode().strip() if stderr else "Unknown ffmpeg error"
-            logger.error(
-                "ffmpeg cut failed for video %d: %s",
-                video_id, error_msg,
-            )
-            raise RuntimeError(f"ffmpeg cut failed: {error_msg}")
+            if has_audio:
+                filter_complex = ";".join([
+                    f"[0:v]trim=0:{start_time},setpts=PTS-STARTPTS[v0]",
+                    f"[0:v]trim={end_time}:{duration},setpts=PTS-STARTPTS[v1]",
+                    f"[v0][v1]concat=n=2:v=1:a=0[vout]",
+                    f"[0:a]atrim=0:{start_time},asetpts=PTS-STARTPTS[a0]",
+                    f"[0:a]atrim={end_time}:{duration},asetpts=PTS-STARTPTS[a1]",
+                    f"[a0][a1]concat=n=2:v=0:a=1[aout]",
+                ])
+                maps = ["-map", "[vout]", "-map", "[aout]"]
+            else:
+                filter_complex = ";".join([
+                    f"[0:v]trim=0:{start_time},setpts=PTS-STARTPTS[v0]",
+                    f"[0:v]trim={end_time}:{duration},setpts=PTS-STARTPTS[v1]",
+                    f"[v0][v1]concat=n=2:v=1:a=0[vout]",
+                ])
+                maps = ["-map", "[vout]"]
+
+            await _run_ffmpeg([
+                "-i", str(video_path),
+                "-filter_complex", filter_complex,
+                *maps,
+                str(tmp_path),
+            ])
+
+        elif has_before:
+            # ── Trim end only: cut everything after start_time ──────
+            await _run_ffmpeg([
+                "-ss", "0",
+                "-i", str(video_path),
+                "-t", f"{start_time:.3f}",
+                "-c", "copy",
+                str(tmp_path),
+            ])
+
+        else:
+            # ── Trim start only: cut everything before end_time ─────
+            after_duration = (duration or 0) - end_time
+            await _run_ffmpeg([
+                "-ss", f"{end_time:.3f}",
+                "-i", str(video_path),
+                "-t", f"{after_duration:.3f}",
+                "-c", "copy",
+                str(tmp_path),
+            ])
 
         if not tmp_path.exists():
             raise RuntimeError("ffmpeg completed but output file was not created.")
 
-        # 4. Replace original with trimmed version (atomic on same filesystem)
+        # 3. Replace original with trimmed version (atomic on same filesystem)
         tmp_path.replace(video_path)
 
         new_size = video_path.stat().st_size
 
-        # 5. Update DB
+        # 4. Update DB
         await db.execute(
             "UPDATE videos SET file_size = ? WHERE id = ?",
             (new_size, video_id),
         )
         await db.commit()
 
-        # 6. Regenerate thumbnail
+        # 5. Regenerate thumbnail
         await file_service.generate_thumbnail(video["filename"])
 
     except Exception:
-        # Clean up temp file on any failure
         if tmp_path.exists():
             tmp_path.unlink()
         raise
