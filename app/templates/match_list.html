@@ -10,10 +10,65 @@
 </div>
 
 {% if matches and matches|length > 0 %}
-<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mt-4">
-    {% for match in matches %}
-    {% include "_match_card.html" %}
-    {% endfor %}
+<div class="uk-overflow-auto">
+    <table class="uk-table uk-table-sm uk-table-divider whitespace-nowrap">
+        <thead>
+            <tr>
+                <th>{{ _("match.form.name") }}</th>
+                <th>{{ _("match.form.date") }}</th>
+                <th>{{ _("match.form.opponent") }}</th>
+                <th>{{ _("match.form.location") }}</th>
+                <th class="uk-text-center">{{ _("stat.mp") }}</th>
+                <th class="uk-text-center font-bold text-primary">{{ _("stat.pts") }}</th>
+                <th class="uk-text-center">{{ _("stat.two_pa") }}</th>
+                <th class="uk-text-center">{{ _("stat.two_pm") }}</th>
+                <th class="uk-text-center">{{ _("stat.three_pa") }}</th>
+                <th class="uk-text-center">{{ _("stat.three_pm") }}</th>
+                <th class="uk-text-center">{{ _("stat.fta") }}</th>
+                <th class="uk-text-center">{{ _("stat.ftm") }}</th>
+                <th class="uk-text-center">{{ _("stat.orb") }}</th>
+                <th class="uk-text-center">{{ _("stat.drb") }}</th>
+                <th class="uk-text-center">{{ _("stat.trb") }}</th>
+                <th class="uk-text-center">{{ _("stat.ast") }}</th>
+                <th class="uk-text-center">{{ _("stat.stl") }}</th>
+                <th class="uk-text-center">{{ _("stat.blk") }}</th>
+                <th class="uk-text-center">{{ _("stat.tov") }}</th>
+                <th class="uk-text-center">{{ _("stat.pf") }}</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for match in matches %}
+            <tr>
+                <td>
+                    <a href="/matches/{{ match.id }}" class="text-primary font-bold">{{ match.name }}</a>
+                </td>
+                <td class="uk-text-muted">{{ match.match_date }}</td>
+                <td>{{ match.opponent or "—" }}</td>
+                <td class="uk-text-muted">{{ match.location or "—" }}</td>
+                <td class="uk-text-center">{{ match.minutes_played if match.minutes_played is not none else "—" }}</td>
+                <td class="uk-text-center font-bold text-primary">{{ match.points if match.points is not none else "—" }}</td>
+                <td class="uk-text-center">{{ match.two_point_attempts if match.two_point_attempts is not none else "—" }}</td>
+                <td class="uk-text-center">{{ match.two_point_made if match.two_point_made is not none else "—" }}</td>
+                <td class="uk-text-center">{{ match.three_point_attempts if match.three_point_attempts is not none else "—" }}</td>
+                <td class="uk-text-center">{{ match.three_point_made if match.three_point_made is not none else "—" }}</td>
+                <td class="uk-text-center">{{ match.free_throw_attempts if match.free_throw_attempts is not none else "—" }}</td>
+                <td class="uk-text-center">{{ match.free_throw_made if match.free_throw_made is not none else "—" }}</td>
+                <td class="uk-text-center">{{ match.offensive_rebounds if match.offensive_rebounds is not none else "—" }}</td>
+                <td class="uk-text-center">{{ match.defensive_rebounds if match.defensive_rebounds is not none else "—" }}</td>
+                <td class="uk-text-center">{{ match.total_rebounds if match.total_rebounds is not none else "—" }}</td>
+                <td class="uk-text-center">{{ match.assists if match.assists is not none else "—" }}</td>
+                <td class="uk-text-center">{{ match.steals if match.steals is not none else "—" }}</td>
+                <td class="uk-text-center">{{ match.blocks if match.blocks is not none else "—" }}</td>
+                <td class="uk-text-center">{{ match.turnovers if match.turnovers is not none else "—" }}</td>
+                <td class="uk-text-center">{{ match.personal_fouls if match.personal_fouls is not none else "—" }}</td>
+                <td>
+                    <a href="/matches/{{ match.id }}" class="uk-btn uk-btn-default uk-btn-xs">{{ _("btn.edit") }}</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
 {% else %}
 <div class="empty-state">
