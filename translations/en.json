@@ -61,6 +61,7 @@
     "clip.cutting": "Cutting...",
     "clip.cut_confirm": "Remove the selected segment from the video permanently? This cannot be undone.",
     "clip.cut_failed": "Failed to cut video.",
+    "clip.cut_complete": "Cut complete!",
     "edit.file_info": "File:",
     "edit.danger_zone": "Danger Zone",
     "edit.danger_desc": "Permanently delete this video and its thumbnail. This cannot be undone.",

@@ -139,21 +139,22 @@ async def cut_video(
 ) -> dict:
     """Remove the segment [start_time, end_time] from a video in-place.
 
-    Uses one of three strategies depending on which edges are being cut:
+    Uses keyframe-accurate (stream copy) cutting via ``-c copy`` for
+    all three cases.  This is fast (no re-encode) but cuts snap to
+    the nearest keyframes — use the frame-accurate re-encode approach
+    if sub-keyframe precision is required.
 
-    * **Trim from end only** (start == 0): re-encode via **trim** filter.
-    * **Trim from start only** (end == duration): re-encode via **trim**
-      filter.
-    * **Cut a middle segment** (both edges): re-encode via the **trim+concat**
-      filter, which splits the video into two sections, drops the removed
-      range, and stitches the remainders together.
+    * **Trim from end only** (start == 0): use ``-t`` duration.
+    * **Trim from start only** (end == duration): use ``-ss`` seek.
+    * **Cut a middle segment** (both edges): extract each keep-range
+      as a temp file, then stitch via the concat demuxer.
 
-    All paths use per-frame (re-encode) trimming so they are not
-    limited to keyframe alignment.
-
-    The DB record is updated with the new file size, and the thumbnail is
-    regenerated.
+    The DB record is updated with the new file size, and the thumbnail
+    is regenerated.
     """
+    import tempfile
+    import shutil as sh_mod
+
     # 1. Fetch video
     video = await video_service.get_video(db, video_id)
     if video is None:
@@ -179,91 +180,48 @@ async def cut_video(
 
     try:
         if has_before and has_after:
-            # ── Middle cut: re-encode via trim + concat filters ─────
-            has_audio = await _has_audio_stream(video_path)
+            # ── Middle cut: extract both keep-ranges then concat ──
+            _tmpdir = Path(tempfile.mkdtemp())
+            try:
+                part1 = _tmpdir / f"part1{ext}"
+                part2 = _tmpdir / f"part2{ext}"
+                concat_txt = _tmpdir / "concat.txt"
 
-            if has_audio:
-                filter_complex = ";".join(
-                    [
-                        f"[0:v]trim=0:{start_time},setpts=PTS-STARTPTS[v0]",
-                        f"[0:v]trim={end_time}:{duration},setpts=PTS-STARTPTS[v1]",
-                        f"[v0][v1]concat=n=2:v=1:a=0[vout]",
-                        f"[0:a]atrim=0:{start_time},asetpts=PTS-STARTPTS[a0]",
-                        f"[0:a]atrim={end_time}:{duration},asetpts=PTS-STARTPTS[a1]",
-                        f"[a0][a1]concat=n=2:v=0:a=1[aout]",
-                    ]
-                )
-                maps = ["-map", "[vout]", "-map", "[aout]"]
-            else:
-                filter_complex = ";".join(
-                    [
-                        f"[0:v]trim=0:{start_time},setpts=PTS-STARTPTS[v0]",
-                        f"[0:v]trim={end_time}:{duration},setpts=PTS-STARTPTS[v1]",
-                        f"[v0][v1]concat=n=2:v=1:a=0[vout]",
-                    ]
-                )
-                maps = ["-map", "[vout]"]
-
-            await _run_ffmpeg(
-                [
-                    "-i",
-                    str(video_path),
-                    "-filter_complex",
-                    filter_complex,
-                    *maps,
+                await _run_ffmpeg([
+                    "-i", str(video_path), "-t", str(start_time),
+                    "-c", "copy", "-map", "0:v", "-map", "0:a?",
+                    str(part1),
+                ])
+                await _run_ffmpeg([
+                    "-ss", str(end_time), "-i", str(video_path),
+                    "-c", "copy", "-map", "0:v", "-map", "0:a?",
+                    str(part2),
+                ])
+                concat_txt.write_text(f"file '{part1}'\nfile '{part2}'\n")
+                await _run_ffmpeg([
+                    "-f", "concat", "-safe", "0",
+                    "-i", str(concat_txt),
+                    "-c", "copy",
                     str(tmp_path),
-                ]
-            )
+                ])
+            finally:
+                sh_mod.rmtree(_tmpdir)
 
         elif has_before:
             # ── Trim end only: keep [0, start_time) ─────────────────
-            has_audio = await _has_audio_stream(video_path)
-            if has_audio:
-                await _run_ffmpeg(
-                    [
-                        "-i", str(video_path),
-                        "-filter_complex",
-                        f"[0:v]trim=0:{start_time},setpts=PTS-STARTPTS[vout];"
-                        f"[0:a]atrim=0:{start_time},asetpts=PTS-STARTPTS[aout]",
-                        "-map", "[vout]", "-map", "[aout]",
-                        str(tmp_path),
-                    ]
-                )
-            else:
-                await _run_ffmpeg(
-                    [
-                        "-i", str(video_path),
-                        "-filter_complex",
-                        f"[0:v]trim=0:{start_time},setpts=PTS-STARTPTS[vout]",
-                        "-map", "[vout]",
-                        str(tmp_path),
-                    ]
-                )
+            await _run_ffmpeg([
+                "-i", str(video_path), "-t", str(start_time),
+                "-c", "copy", "-map", "0:v", "-map", "0:a?",
+                str(tmp_path),
+            ])
 
         else:
             # ── Trim start only: keep [end_time, duration) ─────────
-            has_audio = await _has_audio_stream(video_path)
-            if has_audio:
-                await _run_ffmpeg(
-                    [
-                        "-i", str(video_path),
-                        "-filter_complex",
-                        f"[0:v]trim={end_time}:{duration},setpts=PTS-STARTPTS[vout];"
-                        f"[0:a]atrim={end_time}:{duration},asetpts=PTS-STARTPTS[aout]",
-                        "-map", "[vout]", "-map", "[aout]",
-                        str(tmp_path),
-                    ]
-                )
-            else:
-                await _run_ffmpeg(
-                    [
-                        "-i", str(video_path),
-                        "-filter_complex",
-                        f"[0:v]trim={end_time}:{duration},setpts=PTS-STARTPTS[vout]",
-                        "-map", "[vout]",
-                        str(tmp_path),
-                    ]
-                )
+            await _run_ffmpeg([
+                "-ss", str(end_time), "-i", str(video_path),
+                "-c", "copy", "-map", "0:v", "-map", "0:a?",
+                str(tmp_path),
+            ])
 
         if not tmp_path.exists():
             raise RuntimeError("ffmpeg completed but output file was not created.")

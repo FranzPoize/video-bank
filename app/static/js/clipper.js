@@ -21,11 +21,9 @@
   const SET_BEGIN_ID = "set-begin-btn";
   const SET_END_ID = "set-end-btn";
   const CUT_BTN_ID = "cut-btn";
-  const CUT_PROGRESS_ID = "cut-progress";
   const CUT_CONFIRM_OVERLAY_ID = "cut-confirm-overlay";
   const CUT_CONFIRM_BTN_ID = "cut-confirm-btn";
   const CUT_CANCEL_BTN_ID = "cut-cancel-btn";
-  const CUT_FALLBACK_ERROR_ID = "cut-fallback-error";
   const MIN_DURATION = 1; // seconds
 
   let video = null;
@@ -37,11 +35,9 @@
   let setBeginBtn = null;
   let setEndBtn = null;
   let cutBtn = null;
-  let cutProgress = null;
   let cutConfirmOverlay = null;
   let cutConfirmBtn = null;
   let cutCancelBtn = null;
-  let cutFallbackError = null;
   let duration = 0;
 
   // ── Display update ────────────────────────────────────────────
@@ -213,7 +209,6 @@
     }
 
     errorDisplay.textContent = "";
-    cutFallbackError.classList.add("hidden");
 
     // Show confirm modal (text is server-rendered in the template)
     cutConfirmOverlay.classList.remove("hidden");
@@ -226,7 +221,7 @@
   async function executeCut() {
     cutConfirmOverlay.classList.add("hidden");
 
-    if (!cutBtn || !startInput || !endInput || !errorDisplay || !cutProgress || !cutFallbackError) return;
+    if (!cutBtn || !startInput || !endInput || !errorDisplay) return;
     const videoId = cutBtn.getAttribute("data-video-id");
     if (!videoId) return;
 
@@ -234,10 +229,15 @@
     const end = parseFloat(endInput.value);
 
     cutBtn.disabled = true;
-    cutBtn.classList.add("hidden");
-    cutProgress.classList.remove("hidden");
     errorDisplay.textContent = "";
-    cutFallbackError.classList.add("hidden");
+
+    // Show cutting-in-progress notification (persistent)
+    var cutNotification = UIkit.notification({
+      message: _("clip.cutting"),
+      status: "primary",
+      pos: "bottom-left",
+      timeout: 0
+    });
 
     try {
       const response = await fetch("/api/videos/" + videoId + "/cut", {
@@ -251,25 +251,39 @@
 
       const data = await response.json();
 
+      // Close progress notification
+      cutNotification.close();
+
       if (!response.ok) {
-        if (data.error) {
-          errorDisplay.textContent = data.error;
-        } else {
-          cutFallbackError.classList.remove("hidden");
-        }
+        UIkit.notification({
+          message: "✗ " + (data.error || _("clip.cut_failed")),
+          status: "destructive",
+          pos: "bottom-left",
+          timeout: 0
+        });
         cutBtn.disabled = false;
-        cutBtn.classList.remove("hidden");
-        cutProgress.classList.add("hidden");
         return;
       }
 
-      // Success — redirect back to the (now trimmed) video detail
-      window.location.href = "/videos/" + data.id;
+      // Success — brief success notification, then redirect
+      UIkit.notification({
+        message: "✓ " + _("clip.cut_complete"),
+        status: "success",
+        pos: "bottom-left",
+        timeout: 3000
+      });
+      setTimeout(function () {
+        window.location.href = "/videos/" + data.id;
+      }, 2000);
     } catch (err) {
-      errorDisplay.textContent = _("clip.network_error");
+      cutNotification.close();
+      UIkit.notification({
+        message: "✗ " + _("clip.network_error"),
+        status: "destructive",
+        pos: "bottom-left",
+        timeout: 0
+      });
       cutBtn.disabled = false;
-      cutBtn.classList.remove("hidden");
-      cutProgress.classList.add("hidden");
     }
   }
 
@@ -285,11 +299,9 @@
     setBeginBtn = document.getElementById(SET_BEGIN_ID);
     setEndBtn = document.getElementById(SET_END_ID);
     cutBtn = document.getElementById(CUT_BTN_ID);
-    cutProgress = document.getElementById(CUT_PROGRESS_ID);
     cutConfirmOverlay = document.getElementById(CUT_CONFIRM_OVERLAY_ID);
     cutConfirmBtn = document.getElementById(CUT_CONFIRM_BTN_ID);
     cutCancelBtn = document.getElementById(CUT_CANCEL_BTN_ID);
-    cutFallbackError = document.getElementById(CUT_FALLBACK_ERROR_ID);
 
     if (!video || !startInput || !endInput) return;
 

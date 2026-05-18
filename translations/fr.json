@@ -61,6 +61,7 @@
     "clip.cutting": "Découpage en cours...",
     "clip.cut_confirm": "Supprimer définitivement le segment sélectionné de la vidéo ? Cette action est irréversible.",
     "clip.cut_failed": "Échec du découpage de la vidéo.",
+    "clip.cut_complete": "Découpage terminé !",
     "edit.file_info": "Fichier :",
     "edit.danger_zone": "Zone dangereuse",
     "edit.danger_desc": "Supprimer définitivement cette vidéo et sa miniature. Cette action est irréversible.",
