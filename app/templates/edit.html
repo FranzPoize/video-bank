@@ -2,41 +2,48 @@
 {% block title %}{{ _("page.edit_video") }} — {{ _("nav.video_bank") }}{% endblock %}
 
 {% block content %}
-<div style="max-width: 600px; margin: 0 auto;">
-    <a href="/videos/{{ video.id }}" style="color: #4361ee; text-decoration: none; display: inline-block; margin-bottom: 1rem;">{{ _("link.back_to_video") }}</a>
+<div class="max-w-xl mx-auto">
+    <a href="/videos/{{ video.id }}" class="text-primary no-underline hover:underline inline-block mb-4">{{ _("link.back_to_video") }}</a>
 
-    <h1 style="margin-bottom: 1.5rem;">{{ _("page.edit_video") }}</h1>
+    <h1 class="uk-h3 mb-6">{{ _("page.edit_video") }}</h1>
 
     {% if error %}
-    <div class="error">{{ error }}</div>
+    <div class="uk-alert uk-alert-destructive" data-uk-alert>
+        <a class="uk-alert-close uk-close" data-uk-close></a>
+        <p>{{ error }}</p>
+    </div>
     {% endif %}
 
-    <form action="/videos/{{ video.id }}/edit" method="post" style="background: #fff; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-        <label for="name">{{ _("form.video_name") }}</label>
-        <input type="text" id="name" name="name" required value="{{ video.name }}">
+    <form action="/videos/{{ video.id }}/edit" method="post" class="uk-card uk-card-body space-y-4">
+        <div>
+            <label class="uk-form-label" for="name">{{ _("form.video_name") }}</label>
+            <input class="uk-input" type="text" id="name" name="name" required value="{{ video.name }}">
+        </div>
 
-        <label for="tags">{{ _("form.tags") }}</label>
-        <input type="text" id="tags" name="tags" value="{{ tags_str }}">
+        <div>
+            <label class="uk-form-label" for="tags">{{ _("form.tags") }}</label>
+            <input class="uk-input" type="text" id="tags" name="tags" value="{{ tags_str }}">
+        </div>
 
-        <p style="font-size: 0.8rem; color: #888; margin-bottom: 1rem;">
+        <p class="text-xs text-muted-foreground mb-4">
             {{ _("edit.file_info") }} {{ video.original_name }} ({{ "%.1f"|format(video.file_size / (1024*1024)) }} {{ _("video.mb") }})
         </p>
 
-        <div style="display: flex; gap: 0.5rem;">
-            <button type="submit" class="btn btn-primary">{{ _("btn.save_changes") }}</button>
-            <a href="/videos/{{ video.id }}" class="btn" style="background: #e0e0e0; color: #333;">{{ _("btn.cancel") }}</a>
+        <div class="flex gap-2">
+            <button type="submit" class="uk-btn uk-btn-primary">{{ _("btn.save_changes") }}</button>
+            <a href="/videos/{{ video.id }}" class="uk-btn uk-btn-ghost">{{ _("btn.cancel") }}</a>
         </div>
     </form>
 
-    <hr style="margin: 2rem 0; border: none; border-top: 1px solid #ddd;">
+    <hr class="my-8 border-border">
 
-    <div style="background: #fff; padding: 1.5rem; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-        <h2 style="font-size: 1.1rem; color: #e63946; margin-bottom: 0.5rem;">{{ _("edit.danger_zone") }}</h2>
-        <p style="font-size: 0.9rem; color: #888; margin-bottom: 1rem;">
+    <div class="uk-card uk-card-body">
+        <h2 class="text-destructive text-lg font-semibold mb-2">{{ _("edit.danger_zone") }}</h2>
+        <p class="text-sm text-muted-foreground mb-4">
             {{ _("edit.danger_desc") }}
         </p>
         <form action="/videos/{{ video.id }}/delete" method="post" onsubmit="return confirm('{{ _("edit.confirm_delete") }} {{ video.name }}?');">
-            <button type="submit" class="btn btn-danger">{{ _("btn.delete_video") }}</button>
+            <button type="submit" class="uk-btn uk-btn-destructive">{{ _("btn.delete_video") }}</button>
         </form>
     </div>
 </div>

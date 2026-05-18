@@ -1,27 +1,25 @@
 {% if videos %}
-<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem;">
+<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
     {% for video in videos %}
-    <div style="background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-        <div style="aspect-ratio: 16/9; background: #ddd; display: flex; align-items: center; justify-content: center; color: #888; font-size: 2rem;">
+    <div class="uk-card uk-card-body p-0 overflow-hidden">
+        <div class="aspect-video bg-muted flex items-center justify-center text-muted-foreground text-3xl">
             {% if video.has_thumbnail and video.thumbnail_url %}
-            <img src="{{ video.thumbnail_url }}" alt="{{ video.name }}" style="width: 100%; height: 100%; object-fit: cover;" fetchpriority="high">
+            <img src="{{ video.thumbnail_url }}" alt="{{ video.name }}" class="w-full h-full object-cover" fetchpriority="high">
             {% else %}
             &#9654;
             {% endif %}
         </div>
-        <div style="padding: 0.75rem;">
-            <h3 style="font-size: 1rem; margin-bottom: 0.25rem;">
-                <a href="/videos/{{ video.id }}" style="color: inherit; text-decoration: none;">{{ video.name }}</a>
+        <div class="p-3">
+            <h3 class="uk-card-title text-sm mb-1">
+                <a href="/videos/{{ video.id }}" class="text-foreground no-underline hover:text-primary">{{ video.name }}</a>
             </h3>
-            <p style="font-size: 0.8rem; color: #888; margin-bottom: 0.5rem;">
+            <p class="text-xs text-muted-foreground mb-2">
                 {{ _("video.uploaded") }} {{ video.upload_date }}
             </p>
             {% if video.tags and video.tags|length > 0 %}
-            <div style="display: flex; gap: 0.25rem; flex-wrap: wrap;">
+            <div class="flex flex-wrap gap-1">
                 {% for tag in video.tags %}
-                <span style="background: #e0e7ff; color: #4361ee; padding: 0.15rem 0.5rem; border-radius: 12px; font-size: 0.75rem;">
-                    {{ tag }}
-                </span>
+                <span class="uk-badge uk-badge-primary">{{ tag }}</span>
                 {% endfor %}
             </div>
             {% endif %}
@@ -32,11 +30,11 @@
 {% elif active_tag_id is not none %}
 <div class="empty-state">
     <p>{{ _("video.no_videos_filter") }}</p>
-    <p style="margin-top: 1rem;"><a href="/" class="btn btn-primary">{{ _("filter.clear") }}</a></p>
+    <p class="mt-4"><a href="/" class="uk-btn uk-btn-primary">{{ _("filter.clear") }}</a></p>
 </div>
 {% else %}
 <div class="empty-state">
     <p>{{ _("video.no_videos_yet") }}</p>
-    <p style="margin-top: 1rem;"><a href="/upload" class="btn btn-primary">{{ _("video.upload_first") }}</a></p>
+    <p class="mt-4"><a href="/upload" class="uk-btn uk-btn-primary">{{ _("video.upload_first") }}</a></p>
 </div>
 {% endif %}

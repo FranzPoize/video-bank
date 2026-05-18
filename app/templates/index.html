@@ -2,10 +2,13 @@
 {% block title %}{{ _("page.videos") }} — {{ _("nav.video_bank") }}{% endblock %}
 
 {% block content %}
-<h1 style="margin-bottom: 1.5rem;">{{ _("page.videos") }}</h1>
+<h1 class="uk-h2 mb-6">{{ _("page.videos") }}</h1>
 
 {% if error %}
-<div class="error">{{ error }}</div>
+<div class="uk-alert uk-alert-destructive" data-uk-alert>
+    <a class="uk-alert-close uk-close" data-uk-close></a>
+    <p>{{ error }}</p>
+</div>
 {% endif %}
 
 {% include "_content.html" %}

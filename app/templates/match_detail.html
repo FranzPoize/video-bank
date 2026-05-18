@@ -4,32 +4,32 @@
 {% block content %}
 <div class="page-header">
     <div>
-        <a href="/" style="color: #4361ee; text-decoration: none; display: inline-block; margin-bottom: 0.5rem;">{{ _("match.back_to_list") }}</a>
-        <h1 style="margin-bottom: 0.25rem;">{{ match.name }}</h1>
-        <p style="color: #888; font-size: 0.9rem;">
+        <a href="/" class="text-primary no-underline hover:underline inline-block mb-2">{{ _("match.back_to_list") }}</a>
+        <h1 class="uk-h3 mb-1">{{ match.name }}</h1>
+        <p class="text-muted-foreground text-sm">
             {{ match.match_date }}
             {% if match.opponent %} &middot; vs {{ match.opponent }}{% endif %}
             {% if match.location %} &middot; {{ match.location }}{% endif %}
         </p>
     </div>
     <div class="actions">
-        <a href="/matches/{{ match.id }}/edit" class="btn btn-primary btn-sm">{{ _("btn.edit") }}</a>
+        <a href="/matches/{{ match.id }}/edit" class="uk-btn uk-btn-primary uk-btn-sm">{{ _("btn.edit") }}</a>
         <form action="/matches/{{ match.id }}/delete" method="post" style="display: inline;"
               onsubmit="return confirm('{{ _("match.confirm_delete") }}')">
-            <button type="submit" class="btn btn-danger btn-sm">{{ _("btn.delete") }}</button>
+            <button type="submit" class="uk-btn uk-btn-destructive uk-btn-sm">{{ _("btn.delete") }}</button>
         </form>
     </div>
 </div>
 
 {% if match.notes %}
-<div style="margin-bottom: 1.5rem; padding: 0.75rem; background: #f9f9f9; border-radius: 6px; color: #555;">
+<div class="bg-muted rounded-lg p-3 mb-6 text-foreground/80">
     {{ match.notes }}
 </div>
 {% endif %}
 
 {% include "_match_stats.html" %}
 
-<h2 style="margin-top: 2rem; margin-bottom: 0.75rem;">{{ _("match.videos") }}</h2>
+<h2 class="uk-h4 mt-8 mb-3">{{ _("match.videos") }}</h2>
 <div id="match-videos-section">
     {% include "_match_videos.html" %}
 </div>

@@ -2,13 +2,13 @@
 {% block title %}{{ _("page.create_clip") }} — {{ _("nav.video_bank") }}{% endblock %}
 
 {% block content %}
-<div class="video-wrapper">
-    <div style="margin-bottom: 1rem;">
-        <a href="/videos/{{ video.id }}" style="color: #4361ee; text-decoration: none; display: inline-block; margin-bottom: 0.5rem;">
+<div class="mx-auto max-w-6xl">
+    <div class="mb-4">
+        <a href="/videos/{{ video.id }}" class="text-primary no-underline hover:underline inline-block mb-2">
             {{ _("link.back_to_video") }}
         </a>
-        <h1 style="margin-bottom: 0.25rem;">{{ _("page.create_clip") }}</h1>
-        <p style="color: #888; font-size: 0.9rem;">
+        <h1 class="uk-h3 mb-1">{{ _("page.create_clip") }}</h1>
+        <p class="text-muted-foreground text-sm">
             {{ _("clip.source") }} {{ video.name }}
         </p>
     </div>
@@ -23,31 +23,31 @@
         </div>
 
         <!-- Seeker Controls -->
-        <div id="seeker" class="seeker-controls">
-            <div class="seeker-row">
-                <span class="seeker-label seeker-start">{{ _("clip.start") }}</span>
-                <input type="range" id="clip-start" min="0" max="100" step="0.1" value="0" class="seeker-slider">
+        <div id="seeker" class="bg-card rounded-lg shadow-sm p-4 mb-4">
+            <div class="flex items-center gap-3 mb-3">
+                <span class="seeker-label-start font-semibold text-sm min-w-[3rem]">{{ _("clip.start") }}</span>
+                <input type="range" id="clip-start" min="0" max="100" step="0.1" value="0" class="uk-range flex-1">
             </div>
-            <div class="seeker-row">
-                <span class="seeker-label seeker-end">{{ _("clip.end") }}</span>
-                <input type="range" id="clip-end" min="0" max="100" step="0.1" value="0" class="seeker-slider">
+            <div class="flex items-center gap-3 mb-3">
+                <span class="seeker-label-end font-semibold text-sm min-w-[3rem]">{{ _("clip.end") }}</span>
+                <input type="range" id="clip-end" min="0" max="100" step="0.1" value="0" class="uk-range flex-1">
             </div>
 
             <!-- Timestamp Display -->
-            <div id="clip-times" class="seeker-times">
+            <div id="clip-times" class="text-center text-base font-semibold text-foreground py-2">
                 0s / 0s (0s)
             </div>
 
-            <p class="seeker-hint">
+            <p class="text-center text-xs text-muted-foreground mb-3">
                 {{ _("clip.hint") }}
             </p>
 
             <!-- Error Display -->
-            <div id="clip-error" class="seeker-error"></div>
+            <div id="clip-error" class="text-destructive text-sm mb-2 text-center"></div>
 
             <!-- Create Button -->
-            <div style="text-align: center;">
-                <button id="create-clip-btn" class="btn btn-primary"
+            <div class="text-center">
+                <button id="create-clip-btn" class="uk-btn uk-btn-primary px-8 py-3 text-base"
                         data-video-id="{{ video.id }}">
                     {{ _("btn.create_clip") }}
                 </button>

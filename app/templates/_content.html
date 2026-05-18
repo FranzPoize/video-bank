@@ -1,10 +1,10 @@
 <div id="main-content">
     {% if all_tags and all_tags|length > 0 %}
-    <div id="filter-bar" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; align-items: center;">
-        <span style="font-size: 0.85rem; color: #888; font-weight: 600;">{{ _("filter.label") }}</span>
+    <div id="filter-bar" class="flex flex-wrap items-center gap-2 mb-6">
+        <span class="text-sm text-muted-foreground font-semibold">{{ _("filter.label") }}</span>
 
         <a href="/videos"
-           class="btn btn-sm {% if active_tag_id is none %}btn-primary{% else %}btn-inactive{% endif %}"
+           class="uk-btn uk-btn-sm {% if active_tag_id is none %}uk-btn-primary{% else %}uk-btn-ghost{% endif %}"
            hx-get="/videos"
            hx-target="#main-content"
            hx-swap="outerHTML"
@@ -14,7 +14,7 @@
 
         {% for tag in all_tags %}
         <a href="/videos?tag_id={{ tag.id }}"
-           class="btn btn-sm {% if active_tag_id == tag.id %}btn-primary{% else %}btn-inactive{% endif %}"
+           class="uk-btn uk-btn-sm {% if active_tag_id == tag.id %}uk-btn-primary{% else %}uk-btn-ghost{% endif %}"
            hx-get="/videos?tag_id={{ tag.id }}"
            hx-target="#main-content"
            hx-swap="outerHTML"

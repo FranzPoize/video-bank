@@ -1,0 +1,46 @@
+/* ── Warning badge (Franken UI doesn't ship one) ───── */
+.uk-badge-warning {
+  background: hsl(38 92% 50%);
+  color: hsl(48 96% 89%);
+}
+.dark .uk-badge-warning {
+  background: hsl(48 96% 89%);
+  color: hsl(38 92% 50%);
+}
+
+/* ── Seeker label colors (clipper.js references these) ─ */
+.seeker-label-start { color: hsl(var(--primary)); }
+.seeker-label-end { color: hsl(var(--destructive)); }
+
+/* ── Match card hover transitions ──────────────────── */
+.hover-shadow-md:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+.transition-shadow { transition: box-shadow 0.2s; }
+
+/* ── Video player container (black background) ─────── */
+.video-player { background: #000; border-radius: 0.5rem; overflow: hidden; margin-bottom: 1.5rem; }
+.video-player video { width: 100%; display: block; max-height: 80vh; }
+@media (max-width: 768px) {
+  .video-player video { max-height: 50vh; }
+}
+
+/* ── Video wrapper full-width at large screens ──────── */
+@media (min-width: 1200px) {
+  .video-wrapper-full {
+    width: min(90vw, 1400px);
+    max-width: none;
+    margin: 0;
+    position: relative;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+/* ── Empty state text alignment ────────────────────── */
+.empty-state { text-align: center; padding: 3rem; color: hsl(var(--muted-foreground)); }
+
+/* ── Page header (flex row that wraps on mobile) ───── */
+.page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
+.page-header .actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+@media (max-width: 768px) {
+  .page-header { flex-direction: column; }
+}

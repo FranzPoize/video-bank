@@ -1,9 +1,9 @@
 {% if space.error %}
-<span class="space-critical">{{ _("space.unknown") }}</span>
+<span class="uk-badge uk-badge-destructive">{{ _("space.unknown") }}</span>
 {% elif space.percent_used <= 0.80 %}
-<span class="space-ok">{{ space.free_gb }} {{ _("space.gb_free") }}</span>
+<span class="uk-badge">{{ space.free_gb }} {{ _("space.gb_free") }}</span>
 {% elif space.percent_used <= 0.90 %}
-<span class="space-warn">{{ space.free_gb }} {{ _("space.gb_free") }}</span>
+<span class="uk-badge uk-badge-warning">{{ space.free_gb }} {{ _("space.gb_free") }}</span>
 {% else %}
-<span class="space-critical">{{ space.free_gb }} {{ _("space.gb_free") }}</span>
+<span class="uk-badge uk-badge-destructive">{{ space.free_gb }} {{ _("space.gb_free") }}</span>
 {% endif %}
