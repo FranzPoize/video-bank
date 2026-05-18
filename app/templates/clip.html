@@ -60,7 +60,25 @@
             </div>
 
             <!-- Cut Progress -->
-            <div id="cut-progress" class="hidden text-center mt-3 text-sm text-muted-foreground"></div>
+            <div id="cut-progress" class="hidden text-center mt-3 text-sm text-muted-foreground">
+                {{ _("clip.cutting") }}
+            </div>
+
+            <!-- Cut confirm modal -->
+            <div id="cut-confirm-overlay" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                <div class="bg-card rounded-lg shadow-xl p-6 max-w-sm mx-4">
+                    <p class="mb-4 text-foreground">{{ _("clip.cut_confirm") }}</p>
+                    <div class="flex justify-end gap-2">
+                        <button id="cut-cancel-btn" type="button" class="uk-btn uk-btn-ghost">{{ _("btn.cancel") }}</button>
+                        <button id="cut-confirm-btn" type="button" class="uk-btn uk-btn-danger">{{ _("clip.cut") }}</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cut error fallback (server errors still use clip-error div) -->
+            <div id="cut-fallback-error" class="hidden text-destructive text-sm mb-2 text-center">
+                {{ _("clip.cut_failed") }}
+            </div>
         </div>
     </div>
 </div>

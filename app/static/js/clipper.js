@@ -22,6 +22,10 @@
   const SET_END_ID = "set-end-btn";
   const CUT_BTN_ID = "cut-btn";
   const CUT_PROGRESS_ID = "cut-progress";
+  const CUT_CONFIRM_OVERLAY_ID = "cut-confirm-overlay";
+  const CUT_CONFIRM_BTN_ID = "cut-confirm-btn";
+  const CUT_CANCEL_BTN_ID = "cut-cancel-btn";
+  const CUT_FALLBACK_ERROR_ID = "cut-fallback-error";
   const MIN_DURATION = 1; // seconds
 
   let video = null;
@@ -34,6 +38,10 @@
   let setEndBtn = null;
   let cutBtn = null;
   let cutProgress = null;
+  let cutConfirmOverlay = null;
+  let cutConfirmBtn = null;
+  let cutCancelBtn = null;
+  let cutFallbackError = null;
   let duration = 0;
 
   // ── Display update ────────────────────────────────────────────
@@ -195,28 +203,41 @@
 
   // ── Cut (in-place) ──────────────────────────────────────────────
 
-  async function onCut() {
-    if (!cutBtn || !startInput || !endInput || !errorDisplay || !cutProgress) return;
+  function onCut() {
+    if (!startInput || !endInput || !errorDisplay) return;
+
+    // Client-side validation
+    if (parseFloat(endInput.value) - parseFloat(startInput.value) < MIN_DURATION) {
+      errorDisplay.textContent = _("clip.min_duration");
+      return;
+    }
+
+    errorDisplay.textContent = "";
+    cutFallbackError.classList.add("hidden");
+
+    // Show confirm modal (text is server-rendered in the template)
+    cutConfirmOverlay.classList.remove("hidden");
+  }
+
+  function cancelCut() {
+    cutConfirmOverlay.classList.add("hidden");
+  }
+
+  async function executeCut() {
+    cutConfirmOverlay.classList.add("hidden");
+
+    if (!cutBtn || !startInput || !endInput || !errorDisplay || !cutProgress || !cutFallbackError) return;
     const videoId = cutBtn.getAttribute("data-video-id");
     if (!videoId) return;
 
     const start = parseFloat(startInput.value);
     const end = parseFloat(endInput.value);
 
-    // Client-side validation
-    if (end - start < MIN_DURATION) {
-      errorDisplay.textContent = _("clip.min_duration");
-      return;
-    }
-
-    // Confirm destructive action
-    if (!confirm(_("clip.cut_confirm"))) return;
-
     cutBtn.disabled = true;
-    cutBtn.textContent = _("clip.cutting");
-    cutProgress.textContent = _("clip.cutting");
+    cutBtn.classList.add("hidden");
     cutProgress.classList.remove("hidden");
     errorDisplay.textContent = "";
+    cutFallbackError.classList.add("hidden");
 
     try {
       const response = await fetch("/api/videos/" + videoId + "/cut", {
@@ -231,9 +252,13 @@
       const data = await response.json();
 
       if (!response.ok) {
-        errorDisplay.textContent = data.error || _("clip.cut_failed");
+        if (data.error) {
+          errorDisplay.textContent = data.error;
+        } else {
+          cutFallbackError.classList.remove("hidden");
+        }
         cutBtn.disabled = false;
-        cutBtn.textContent = _("clip.cut");
+        cutBtn.classList.remove("hidden");
         cutProgress.classList.add("hidden");
         return;
       }
@@ -243,7 +268,7 @@
     } catch (err) {
       errorDisplay.textContent = _("clip.network_error");
       cutBtn.disabled = false;
-      cutBtn.textContent = _("clip.cut");
+      cutBtn.classList.remove("hidden");
       cutProgress.classList.add("hidden");
     }
   }
@@ -261,6 +286,10 @@
     setEndBtn = document.getElementById(SET_END_ID);
     cutBtn = document.getElementById(CUT_BTN_ID);
     cutProgress = document.getElementById(CUT_PROGRESS_ID);
+    cutConfirmOverlay = document.getElementById(CUT_CONFIRM_OVERLAY_ID);
+    cutConfirmBtn = document.getElementById(CUT_CONFIRM_BTN_ID);
+    cutCancelBtn = document.getElementById(CUT_CANCEL_BTN_ID);
+    cutFallbackError = document.getElementById(CUT_FALLBACK_ERROR_ID);
 
     if (!video || !startInput || !endInput) return;
 
@@ -300,6 +329,12 @@
     // Cut button
     if (cutBtn) {
       cutBtn.addEventListener("click", onCut);
+    }
+    if (cutConfirmBtn) {
+      cutConfirmBtn.addEventListener("click", executeCut);
+    }
+    if (cutCancelBtn) {
+      cutCancelBtn.addEventListener("click", cancelCut);
     }
 
     // Set-begin / set-end buttons
