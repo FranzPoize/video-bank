@@ -220,8 +220,8 @@ class TestCutWithMock:
         """When ffmpeg fails, cut endpoint returns 500."""
         video_id = await create_test_video(client, "Failing Source", "")
 
-        # start=0, end=10 → has_after only → only 2 subprocess calls
-        with mock_ffmpeg(source_filename="fail", returncode=1):
+        # start=0, end=10 → has_after only → 3 subprocess calls now
+        with mock_ffmpeg(source_filename="fail", returncode=1, has_audio=True):
             response = await client.post(
                 f"/api/videos/{video_id}/cut",
                 content=json.dumps({"start": 0, "end": 10}),
