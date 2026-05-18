@@ -19,9 +19,11 @@
 
     <div>
         <label class="uk-form-label" for="file">{{ _("form.video_file") }}</label>
-        <div data-uk-form-custom>
-            <input type="file" id="file" name="file" accept="video/mp4,video/webm,video/quicktime" required>
-            <button class="uk-btn uk-btn-default" type="button" tabindex="-1">{{ _("form.select_file") }}</button>
+        <div class="uk-margin" uk-margin>
+            <div uk-form-custom="target: true">
+                <input type="file" aria-label="Custom controls" name="file">
+                <input class="uk-input uk-form-width-medium" type="text" placeholder="Select file" aria-label="Custom controls" disabled>
+            </div>
         </div>
     </div>
 

@@ -8,3 +8,4 @@ uploads/thumbnails/*
 data/*.db
 .env
 logs/
+thoughts/franken-ui/

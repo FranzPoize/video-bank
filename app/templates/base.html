@@ -29,7 +29,10 @@
       href="https://cdn.jsdelivr.net/npm/franken-ui@2.1.2/dist/css/utilities.min.css"
     />
     <link rel="stylesheet" href="/static/css/custom.css">
-
+    <script
+      src="https://cdn.jsdelivr.net/npm/franken-ui@2.1.2/dist/js/core.iife.js"
+      type="module"
+    ></script>
     <!-- HTMX -->
     <script src="/static/js/htmx.min.js"></script>
 
@@ -50,7 +53,7 @@
                 {{ current_flag }} {{ current_lang.upper() }}
                 <span class="ml-1 text-xs opacity-70">&#9660;</span>
             </button>
-            <div class="uk-dropdown uk-dropdown min-w-36" data-uk-dropdown="mode: click">
+            <div class="uk-drop uk-dropdown min-w-36" data-uk-dropdown="mode: click; animation: uk-anmt-slide-top-sm">
                 <ul class="uk-nav uk-nav-dropdown">
                     <li><a hx-post="/api/lang" hx-vals='{"lang": "en"}' hx-target="body">&#127468;&#127463; {{ _("lang.en") }}</a></li>
                     <li><a hx-post="/api/lang" hx-vals='{"lang": "fr"}' hx-target="body">&#127467;&#127479; {{ _("lang.fr") }}</a></li>
