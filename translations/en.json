@@ -127,6 +127,10 @@
     "stat.blk": "BLK",
     "stat.tov": "TOV",
     "stat.pf": "PF",
+    "stat.gp": "GP",
+    "stat.season": "Season",
+    "stat.season_averages": "Season Averages",
+    "stat.all_years": "All Years",
     "stat.efg": "eFG%",
     "stat.ts": "TS%"
 }

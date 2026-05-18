@@ -9,6 +9,78 @@
     </div>
 </div>
 
+{% if year_summary and year_summary|length > 0 %}
+<h2 class="uk-h3 mt-8 mb-4">{{ _("stat.season_averages") }}</h2>
+<div class="uk-overflow-auto mb-8">
+    <table class="uk-table uk-table-sm uk-table-divider text-xs min-w-[900px]">
+        <thead>
+            <tr>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.season") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.gp") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.mp") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.pts") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.fga") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.fgm") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.fg_pct") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.two_pa") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.two_pm") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.two_pct") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.three_pa") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.three_pm") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.three_pct") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.fta") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.ftm") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.ft_pct") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.efg") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.ts") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.orb") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.drb") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.trb") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.ast") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.stl") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.blk") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.tov") }}</th>
+                <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1 py-2">{{ _("stat.pf") }}</th>
+            </tr>
+        </thead>
+        <tbody class="[&_tr:hover]:bg-accent/50">
+            {% for row in year_summary %}
+            <tr class="{% if row.label == 'All' %}font-bold bg-muted/20{% endif %}">
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">
+                    {% if row.label == "All" %}{{ _("stat.all_years") }}{% else %}{{ row.label }}{% endif %}
+                </td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{{ row.match_count }}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{{ "%.1f"|format(row.minutes_played) }}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border font-bold text-destructive">{{ "%.1f"|format(row.points) }}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{{ "%.1f"|format(row.fg_attempts) }}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{{ "%.1f"|format(row.fg_made) }}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{% if row.fg_pct is not none %}{{ "%.1f"|format(row.fg_pct) }}%{% else %}—{% endif %}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{{ "%.1f"|format(row.two_point_attempts) }}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{{ "%.1f"|format(row.two_point_made) }}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{% if row.two_pct is not none %}{{ "%.1f"|format(row.two_pct) }}%{% else %}—{% endif %}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{{ "%.1f"|format(row.three_point_attempts) }}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{{ "%.1f"|format(row.three_point_made) }}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{% if row.three_pct is not none %}{{ "%.1f"|format(row.three_pct) }}%{% else %}—{% endif %}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{{ "%.1f"|format(row.free_throw_attempts) }}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{{ "%.1f"|format(row.free_throw_made) }}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{% if row.ft_pct is not none %}{{ "%.1f"|format(row.ft_pct) }}%{% else %}—{% endif %}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{% if row.efg_pct is not none %}{{ "%.1f"|format(row.efg_pct) }}%{% else %}—{% endif %}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{% if row.ts_pct is not none %}{{ "%.1f"|format(row.ts_pct) }}%{% else %}—{% endif %}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{{ "%.1f"|format(row.offensive_rebounds) }}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{{ "%.1f"|format(row.defensive_rebounds) }}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{{ "%.1f"|format(row.total_rebounds) }}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{{ "%.1f"|format(row.assists) }}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{{ "%.1f"|format(row.steals) }}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{{ "%.1f"|format(row.blocks) }}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{{ "%.1f"|format(row.turnovers) }}</td>
+                <td class="text-center px-1 py-2 whitespace-nowrap border-b border-border">{{ "%.1f"|format(row.personal_fouls) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
 {% if matches and matches|length > 0 %}
 <div class="uk-overflow-auto">
     <table class="uk-table uk-table-sm uk-table-divider whitespace-nowrap">

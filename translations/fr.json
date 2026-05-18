@@ -107,8 +107,8 @@
     "match.select_video": "Sélectionnez une vidéo à lire",
     "stat.mp": "MP",
     "stat.pts": "PTS",
-    "stat.fga": "TFS",
-    "stat.fgm": "TFR",
+    "stat.fga": "FGT",
+    "stat.fgm": "FGR",
     "stat.fg_pct": "TF%",
     "stat.two_pa": "2PT",
     "stat.two_pm": "2PR",
@@ -127,6 +127,10 @@
     "stat.blk": "CON",
     "stat.tov": "PTP",
     "stat.pf": "FTS",
+    "stat.gp": "MJ",
+    "stat.season": "Saison",
+    "stat.season_averages": "Moyennes par saison",
+    "stat.all_years": "Toutes les saisons",
     "stat.efg": "eFG%",
     "stat.ts": "TS%"
 }

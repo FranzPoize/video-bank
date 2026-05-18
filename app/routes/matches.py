@@ -54,13 +54,14 @@ def _parse_match_form(form_data: dict) -> dict:
 
 @router.get("/")
 async def list_matches(request: Request, db=Depends(get_db)):
-    """Home page — show all matches ordered by date descending."""
+    """Home page — show all matches with per-year stat summary."""
     i18n = get_i18n(request)
     matches = await match_service.list_matches(db)
+    year_summary = await match_service.compute_year_summary(db)
     return templates.TemplateResponse(
         request,
         "match_list.html",
-        {**i18n, "matches": matches},
+        {**i18n, "matches": matches, "year_summary": year_summary},
     )
 
 
