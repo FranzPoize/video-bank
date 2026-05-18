@@ -1,3 +1,8 @@
+:root {
+    --uk-container-max-width: 1400px;
+    --background: 252 52% 5%;
+    --foreground: 0 0% 82%;
+}
 /* ── Warning badge (Franken UI doesn't ship one) ───── */
 .uk-badge-warning {
   background: hsl(38 92% 50%);
