@@ -265,7 +265,7 @@
         return;
       }
 
-      // Success — brief success notification, then redirect
+      // Success — brief success notification, then reload clip page
       UIkit.notification({
         message: "✓ " + _("clip.cut_complete"),
         status: "success",
@@ -273,7 +273,7 @@
         timeout: 3000
       });
       setTimeout(function () {
-        window.location.href = "/videos/" + data.id;
+        window.location.href = "/videos/" + data.id + "/clip";
       }, 2000);
     } catch (err) {
       cutNotification.close();
