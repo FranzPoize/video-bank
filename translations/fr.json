@@ -112,6 +112,7 @@
   "match.form.cancel": "Annuler",
   "match.video_belongs_to": "Fait partie du match :",
   "match.linked_matches": "Matchs",
+  "match.select_video": "Sélectionnez une vidéo à lire",
 
   "stat.mp": "MP",
   "stat.pts": "PTS",

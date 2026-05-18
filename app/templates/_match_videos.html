@@ -1,40 +1,49 @@
-{% if match.videos and match.videos|length > 0 %}
-<div class="space-y-2">
-    {% for video in match.videos %}
-    <div class="flex items-center gap-3 p-3 bg-card rounded-lg shadow-sm">
-        <a href="/videos/{{ video.id }}" class="font-semibold text-primary no-underline hover:underline">{{ video.name }}</a>
-        {% if video.tags and video.tags|length > 0 %}
-        <div class="flex gap-1 ml-auto">
-            {% for tag in video.tags %}
-            <span class="uk-badge uk-badge-primary">{{ tag }}</span>
-            {% endfor %}
-        </div>
-        {% endif %}
-        <div class="flex items-center gap-2 ml-auto">
-            <button class="uk-btn uk-btn-destructive uk-btn-sm"
+<div id="match-videos-section">
+    {% if match.videos and match.videos|length > 0 %}
+    <div class="space-y-1">
+        {% for video in match.videos %}
+        <div class="flex items-center gap-2 p-2 rounded-lg hover:bg-accent transition-colors cursor-pointer"
+             hx-get="/api/matches/{{ match.id }}/videos/{{ video.id }}/player"
+             hx-target="#match-player-section"
+             hx-swap="outerHTML"
+             {% if loop.first and refresh_player %}hx-trigger="load"{% endif %}>
+            <div class="flex-1 min-w-0">
+                <div class="font-medium text-sm truncate">{{ video.name }}</div>
+                {% if video.tags and video.tags|length > 0 %}
+                <div class="flex gap-1 mt-0.5 flex-wrap">
+                    {% for tag in video.tags %}
+                    <span class="uk-badge uk-badge-primary" style="font-size: 0.65rem; padding: 0.1rem 0.4rem;">{{ tag }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            <button class="uk-btn uk-btn-destructive uk-btn-xs flex-shrink-0"
                     hx-post="/api/matches/{{ match.id }}/videos/{{ video.id }}/remove"
                     hx-target="#match-videos-section"
-                    hx-swap="outerHTML">
+                    hx-swap="outerHTML"
+                    onclick="event.stopPropagation();">
                 {{ _("match.remove_video") }}
             </button>
         </div>
-    </div>
-    {% endfor %}
-</div>
-{% else %}
-<p class="text-muted-foreground">{{ _("match.no_videos") }}</p>
-{% endif %}
-
-{% if unlinked_videos and unlinked_videos|length > 0 %}
-<form class="flex items-center gap-2 mt-4 p-3 bg-accent/50 rounded-lg"
-      hx-post="/api/matches/{{ match.id }}/videos"
-      hx-target="#match-videos-section"
-      hx-swap="outerHTML">
-    <select name="video_id" class="uk-select uk-form-sm flex-1">
-        {% for v in unlinked_videos %}
-        <option value="{{ v.id }}">{{ v.name }}</option>
         {% endfor %}
-    </select>
-    <button type="submit" class="uk-btn uk-btn-primary uk-btn-sm">{{ _("match.link_video") }}</button>
-</form>
-{% endif %}
+    </div>
+    {% else %}
+    <p class="text-muted-foreground text-sm">{{ _("match.no_videos") }}</p>
+    {% endif %}
+
+    {% if unlinked_videos and unlinked_videos|length > 0 %}
+    <div class="mt-4 pt-3 border-t border-border">
+        <form class="flex gap-2"
+              hx-post="/api/matches/{{ match.id }}/videos"
+              hx-target="#match-videos-section"
+              hx-swap="outerHTML">
+            <select name="video_id" class="uk-select uk-form-xs flex-1">
+                {% for v in unlinked_videos %}
+                <option value="{{ v.id }}">{{ v.name }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="uk-btn uk-btn-primary uk-btn-xs">{{ _("match.link_video") }}</button>
+        </form>
+    </div>
+    {% endif %}
+</div>

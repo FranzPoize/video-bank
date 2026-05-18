@@ -5,8 +5,8 @@
 <div class="page-header">
     <div>
         <a href="/" class="text-primary no-underline hover:underline inline-block mb-2">{{ _("match.back_to_list") }}</a>
-        <h1 class="uk-h3 mb-1">{{ match.name }}</h1>
-        <p class="text-muted-foreground text-sm">
+        <h1 class="uk-h1 mb-4">{{ match.name }}</h1>
+        <p class="text-muted-foreground uk-h3 mb-4">
             {{ match.match_date }}
             {% if match.opponent %} &middot; vs {{ match.opponent }}{% endif %}
             {% if match.location %} &middot; {{ match.location }}{% endif %}
@@ -27,10 +27,44 @@
 </div>
 {% endif %}
 
-{% include "_match_stats.html" %}
+<div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+    <!-- Left sidebar: video list -->
+    <div class="lg:col-span-1">
+        <div class="bg-card border border-border rounded-lg p-3">
+            <h3 class="uk-h4 mb-3">{{ _("match.videos") }}</h3>
+            {% include "_match_videos.html" %}
+        </div>
+    </div>
 
-<h2 class="uk-h4 mt-8 mb-3">{{ _("match.videos") }}</h2>
-<div id="match-videos-section">
-    {% include "_match_videos.html" %}
+    <!-- Right column: player + stats -->
+    <div class="lg:col-span-3 space-y-6">
+        <div id="match-player-section">
+            {% if match.videos and match.videos|length > 0 %}
+            {% set first_video = match.videos[0] %}
+            <div class="bg-black rounded-lg overflow-hidden mb-4">
+                <video controls preload="metadata" class="w-full max-h-[60vh]">
+                    <source src="/api/videos/{{ first_video.id }}/file" type="{{ first_video.mime_type }}">
+                    {{ _("video.browser_no_video") }}
+                </video>
+            </div>
+            <div class="flex items-center gap-3 mb-4">
+                <h3 class="uk-h3 mb-0">{{ first_video.name }}</h3>
+                {% if first_video.tags and first_video.tags|length > 0 %}
+                <div class="flex gap-1 ml-auto">
+                    {% for tag in first_video.tags %}
+                    <span class="uk-badge uk-badge-primary">{{ tag }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="bg-muted rounded-lg flex items-center justify-center h-48 mb-4">
+                <p class="text-muted-foreground">{{ _("match.select_video") }}</p>
+            </div>
+            {% endif %}
+        </div>
+
+        {% include "_match_stats.html" %}
+    </div>
 </div>
 {% endblock %}

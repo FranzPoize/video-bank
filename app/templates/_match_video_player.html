@@ -1,0 +1,24 @@
+<div id="match-player-section">
+    {% if video %}
+    <div class="bg-black rounded-lg overflow-hidden mb-4">
+        <video controls preload="metadata" class="w-full max-h-[60vh]">
+            <source src="/api/videos/{{ video.id }}/file" type="{{ video.mime_type }}">
+            {{ _("video.browser_no_video") }}
+        </video>
+    </div>
+    <div class="flex items-center gap-3 mb-4">
+        <h3 class="uk-h3 mb-0">{{ video.name }}</h3>
+        {% if video.tags and video.tags|length > 0 %}
+        <div class="flex gap-1 ml-auto">
+            {% for tag in video.tags %}
+            <span class="uk-badge uk-badge-primary">{{ tag }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="bg-muted rounded-lg flex items-center justify-center h-48 mb-4">
+        <p class="text-muted-foreground">{{ _("match.select_video") }}</p>
+    </div>
+    {% endif %}
+</div>

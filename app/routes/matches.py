@@ -136,7 +136,29 @@ async def match_detail(request: Request, match_id: int, db=Depends(get_db)):
     return templates.TemplateResponse(
         request,
         "match_detail.html",
-        {**i18n, "match": result, "computed": computed, "unlinked_videos": unlinked},
+        {**i18n, "match": result, "computed": computed, "unlinked_videos": unlinked, "refresh_player": False},
+    )
+
+
+@router.get("/api/matches/{match_id}/videos/{video_id}/player")
+async def match_video_player(
+    request: Request,
+    match_id: int,
+    video_id: int,
+    db=Depends(get_db),
+):
+    """HTMX fragment: return video player HTML for a given match video."""
+    i18n = get_i18n(request)
+    from app.services.video_service import get_video_with_tags
+
+    video = await get_video_with_tags(db, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    return templates.TemplateResponse(
+        request,
+        "_match_video_player.html",
+        {**i18n, "video": video},
     )
 
 
@@ -219,6 +241,7 @@ async def link_video(
             "match": {"id": match_id, "videos": result.get("videos", []) if result else []},
             "computed": computed,
             "unlinked_videos": unlinked,
+            "refresh_player": False,
         },
     )
 
@@ -245,5 +268,6 @@ async def unlink_video(
             **i18n,
             "match": {"id": match_id, "videos": result.get("videos", []) if result else []},
             "unlinked_videos": unlinked,
+            "refresh_player": True,
         },
     )
