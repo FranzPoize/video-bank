@@ -55,6 +55,8 @@
     "clip.min_duration": "La durée minimale de l'extrait est de 1 seconde.",
     "clip.failed": "Échec de la création de l'extrait.",
     "clip.network_error": "Erreur réseau. Veuillez réessayer.",
+    "clip.set_begin": "Définir début",
+    "clip.set_end": "Définir fin",
     "edit.file_info": "Fichier :",
     "edit.danger_zone": "Zone dangereuse",
     "edit.danger_desc": "Supprimer définitivement cette vidéo et sa miniature. Cette action est irréversible.",

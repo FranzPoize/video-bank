@@ -27,10 +27,12 @@
             <div class="flex items-center gap-3 mb-3">
                 <span class="seeker-label-start font-semibold text-sm min-w-[3rem]">{{ _("clip.start") }}</span>
                 <input type="range" id="clip-start" min="0" max="100" step="0.1" value="0" class="uk-range flex-1">
+                <button id="set-begin-btn" type="button" class="uk-btn uk-btn-ghost uk-btn-xs flex-shrink-0">{{ _("clip.set_begin") }}</button>
             </div>
             <div class="flex items-center gap-3 mb-3">
                 <span class="seeker-label-end font-semibold text-sm min-w-[3rem]">{{ _("clip.end") }}</span>
                 <input type="range" id="clip-end" min="0" max="100" step="0.1" value="0" class="uk-range flex-1">
+                <button id="set-end-btn" type="button" class="uk-btn uk-btn-ghost uk-btn-xs flex-shrink-0">{{ _("clip.set_end") }}</button>
             </div>
 
             <!-- Timestamp Display -->

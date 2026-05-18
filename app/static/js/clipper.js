@@ -18,6 +18,8 @@
   const TIMES_ID = "clip-times";
   const BTN_ID = "create-clip-btn";
   const ERROR_ID = "clip-error";
+  const SET_BEGIN_ID = "set-begin-btn";
+  const SET_END_ID = "set-end-btn";
   const MIN_DURATION = 1; // seconds
 
   let video = null;
@@ -26,6 +28,8 @@
   let timesDisplay = null;
   let btn = null;
   let errorDisplay = null;
+  let setBeginBtn = null;
+  let setEndBtn = null;
   let duration = 0;
 
   // ── Display update ────────────────────────────────────────────
@@ -92,6 +96,46 @@
     seekVideo(time);
   }
 
+  // ── Set handle to current video time ───────────────────────────
+
+  function setHandleToCurrentTime(isStart) {
+    if (!video || !duration) return;
+    const time = video.currentTime;
+
+    if (isStart) {
+      let start = time;
+      let end = parseFloat(endInput.value);
+      // If start would leave less than MIN_DURATION, push end forward
+      if (start > end - MIN_DURATION) {
+        end = Math.min(duration, start + MIN_DURATION);
+        // If pushing pushed end past max, clamp start back instead
+        if (end > duration) {
+          end = duration;
+          start = Math.max(0, end - MIN_DURATION);
+        }
+      }
+      startInput.value = start.toFixed(1);
+      endInput.value = end.toFixed(1);
+    } else {
+      let end = time;
+      let start = parseFloat(startInput.value);
+      // If end would leave less than MIN_DURATION, push start back
+      if (end < start + MIN_DURATION) {
+        start = Math.max(0, end - MIN_DURATION);
+        // If pushing pushed start below 0, clamp end forward instead
+        if (start < 0) {
+          start = 0;
+          end = Math.min(duration, start + MIN_DURATION);
+        }
+      }
+      startInput.value = start.toFixed(1);
+      endInput.value = end.toFixed(1);
+    }
+
+    updateDisplay();
+    seekVideo(time);
+  }
+
   // ── Submit ─────────────────────────────────────────────────────
 
   async function onSubmit() {
@@ -149,6 +193,8 @@
     timesDisplay = document.getElementById(TIMES_ID);
     btn = document.getElementById(BTN_ID);
     errorDisplay = document.getElementById(ERROR_ID);
+    setBeginBtn = document.getElementById(SET_BEGIN_ID);
+    setEndBtn = document.getElementById(SET_END_ID);
 
     if (!video || !startInput || !endInput) return;
 
@@ -183,6 +229,18 @@
     // Submit button
     if (btn) {
       btn.addEventListener("click", onSubmit);
+    }
+
+    // Set-begin / set-end buttons
+    if (setBeginBtn) {
+      setBeginBtn.addEventListener("click", function () {
+        setHandleToCurrentTime(true);
+      });
+    }
+    if (setEndBtn) {
+      setEndBtn.addEventListener("click", function () {
+        setHandleToCurrentTime(false);
+      });
     }
   }
 
