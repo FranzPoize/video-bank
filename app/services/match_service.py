@@ -222,3 +222,74 @@ async def get_video_matches(db: aiosqlite.Connection, video_id: int) -> list[dic
     )
     rows = await cursor.fetchall()
     return [dict(r) for r in rows]
+
+
+async def compute_year_summary(db: aiosqlite.Connection) -> list[dict]:
+    """Compute per-year and overall stat averages from all matches.
+
+    Returns a list of row dicts suitable for the summary table, one per
+    year (oldest first) plus a final row for all years combined.
+
+    Each row contains:
+      - label (str): year string or "All" for the overall row
+      - match_count (int): number of games in that group
+      - Per-game averages for every raw stat field (float, 1 decimal)
+      - fg_attempts, fg_made: per-game averages (float, 1 decimal)
+      - fg_pct, two_pct, three_pct, ft_pct, efg_pct, ts_pct:
+        season percentages computed from aggregate totals (float or None)
+
+    Returns an empty list if there are no matches.
+    """
+    cursor = await db.execute("SELECT * FROM matches ORDER BY match_date ASC")
+    matches = [dict(r) for r in await cursor.fetchall()]
+
+    if not matches:
+        return []
+
+    # Group by year
+    from collections import defaultdict
+
+    years: dict[str, list[dict]] = defaultdict(list)
+    for m in matches:
+        year = m["match_date"][:4] if m.get("match_date") else "?"
+        years[year].append(m)
+
+    raw_fields = [
+        "minutes_played", "points",
+        "two_point_attempts", "two_point_made",
+        "three_point_attempts", "three_point_made",
+        "free_throw_attempts", "free_throw_made",
+        "offensive_rebounds", "defensive_rebounds", "total_rebounds",
+        "assists", "steals", "blocks", "turnovers", "personal_fouls",
+    ]
+
+    from app.services.stats_calculator import compute_all
+
+    def _row(label: str, group: list[dict]) -> dict:
+        count = len(group)
+        # Sum raw stats
+        sums = {f: 0.0 for f in raw_fields}
+        for m in group:
+            for f in raw_fields:
+                v = m.get(f)
+                if v is not None:
+                    sums[f] += v
+        # Per-game averages for raw stats
+        row: dict = {"label": label, "match_count": count}
+        for f in raw_fields:
+            row[f] = round(sums[f] / count, 1) if count else 0
+        # Computed stats from aggregate totals
+        computed = compute_all({k: int(v) for k, v in sums.items()})
+        # Per-game averages for FGA / FGM (compute_all returns total counts)
+        row["fg_attempts"] = round(computed["fg_attempts"] / count, 1) if count else 0
+        row["fg_made"] = round(computed["fg_made"] / count, 1) if count else 0
+        # Percentages stay as computed from aggregate totals
+        for k in ("fg_pct", "two_pct", "three_pct", "ft_pct", "efg_pct", "ts_pct"):
+            row[k] = computed.get(k)
+        return row
+
+    rows = []
+    for year in sorted(years.keys()):
+        rows.append(_row(year, years[year]))
+    rows.append(_row("All", matches))
+    return rows

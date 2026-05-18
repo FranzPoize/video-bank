@@ -56,7 +56,7 @@ async def client(db) -> AsyncGenerator[AsyncClient, None]:
 
 
 @contextmanager
-def mock_ffmpeg(source_filename="src.mp4", duration=60.0, returncode=0):
+def mock_ffmpeg(source_filename="src.mp4", duration=60.0, returncode=0, has_audio=False):
     """Context manager that mocks ffmpeg/ffprobe for clip tests.
 
     Sets up:
@@ -69,6 +69,8 @@ def mock_ffmpeg(source_filename="src.mp4", duration=60.0, returncode=0):
         source_filename: The filename that triggers "source" path matching.
         duration: Duration in seconds that ffprobe returns.
         returncode: Return code for the ffmpeg subprocess (0 = success).
+        has_audio: When True, adds an extra ffprobe mock for
+                   ``_has_audio_stream`` (needed by cut_video).
 
     Yields:
         Tuple of (mock_which, mock_subproc) for additional assertions.
@@ -81,19 +83,25 @@ def mock_ffmpeg(source_filename="src.mp4", duration=60.0, returncode=0):
             "ffmpeg": "/usr/bin/ffmpeg",
         }.get(cmd)
 
-        # Mock ffprobe subprocess
-        mock_ffprobe_proc = AsyncMock()
-        mock_ffprobe_proc.returncode = 0
-        mock_ffprobe_proc.communicate = AsyncMock(
-            return_value=(f"{duration}\n".encode(), b"")
-        )
+        def _subproc_side_effect(*args, **kwargs):
+            """Return the appropriate mock process for any subprocess call."""
+            binary = args[0]
+            proc = AsyncMock()
+            if "ffprobe" in binary:
+                proc.returncode = 0
+                out = f"{duration}\n".encode()
+                # Handle _has_audio_stream if called
+                if "-select_streams" in args:
+                    out = b"audio\n" if has_audio else b""
+                proc.communicate = AsyncMock(return_value=(out, b""))
+            else:
+                proc.returncode = returncode
+                proc.communicate = AsyncMock(
+                    return_value=(b"", b"ffmpeg error output" if returncode != 0 else b"")
+                )
+            return proc
 
-        # Mock ffmpeg subprocess
-        mock_ffmpeg_proc = AsyncMock()
-        mock_ffmpeg_proc.returncode = returncode
-        mock_ffmpeg_proc.communicate = AsyncMock(return_value=(b"", b"ffmpeg error output" if returncode != 0 else b""))
-
-        mock_subproc.side_effect = [mock_ffprobe_proc, mock_ffmpeg_proc]
+        mock_subproc.side_effect = _subproc_side_effect
 
         # Mock file paths
         with patch("app.services.clip_service.file_service.get_video_path") as mock_get_path, \
@@ -103,11 +111,25 @@ def mock_ffmpeg(source_filename="src.mp4", duration=60.0, returncode=0):
                 return type("Stat", (), {"st_size": size})()
 
             def _make_path(exists=True):
-                return type("Path", (), {
-                    "exists": lambda self: exists,
-                    "stat": lambda self: _make_stat(),
-                    "unlink": lambda self: None,
-                })()
+                stats = {"st_size": 1024}
+
+                class MockPath:
+                    def exists(self):
+                        return exists
+
+                    def stat(self):
+                        return type("Stat", (), stats)()
+
+                    def unlink(self):
+                        pass
+
+                    def with_name(self, name):
+                        return _make_path(exists)
+
+                    def replace(self, dest):
+                        pass
+
+                return MockPath()
 
             mock_src_path = _make_path(True)
             mock_clip_path = _make_path(returncode == 0)

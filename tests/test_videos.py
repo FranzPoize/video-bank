@@ -441,18 +441,18 @@ class TestDiskSpace:
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
         assert "GB free" in response.text
-        assert "space-ok" in response.text
+        assert "uk-badge" in response.text
 
     @pytest.mark.asyncio
     async def test_space_api_endpoint_critical(self, client):
-        """GET /api/space shows space-critical class when disk is near full."""
+        """GET /api/space shows uk-badge-destructive class when disk is near full."""
         with patch("app.services.file_service.shutil.disk_usage") as mock_du:
-            # 950GB used out of 1TB → 95% → space-critical (red)
+            # 950GB used out of 1TB → 95% → uk-badge-destructive (red)
             mock_du.return_value = DiskUsage(1_000_000_000_000, 950_000_000_000, 50_000_000_000)
 
             response = await client.get("/api/space")
         assert response.status_code == 200
-        assert "space-critical" in response.text
+        assert "uk-badge-destructive" in response.text
 
     @pytest.mark.asyncio
     async def test_space_api_endpoint_error(self, client):
@@ -463,4 +463,4 @@ class TestDiskSpace:
             response = await client.get("/api/space")
         assert response.status_code == 200
         assert "Space: unknown" in response.text
-        assert "space-critical" in response.text
+        assert "uk-badge-destructive" in response.text

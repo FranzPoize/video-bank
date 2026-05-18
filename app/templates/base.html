@@ -1,41 +1,71 @@
 <!DOCTYPE html>
-<html lang="{{ current_lang }}">
+<html lang="{{ current_lang }}" class="uk-theme-neutral uk-radii-md uk-shadows-sm uk-font-sm">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}{{ _("nav.video_bank") }}{% endblock %}</title>
+
+    <!-- Theme initialization (before any CSS loads to prevent FOUC) -->
+    <script>
+        (function() {
+            var html = document.documentElement;
+            try {
+                var stored = JSON.parse(localStorage.getItem("__FRANKEN__") || "{}");
+                if (stored.mode === "dark" || (!stored.mode && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+                    html.classList.add("dark");
+                }
+                html.classList.add(stored.theme || "uk-theme-neutral");
+                html.classList.add(stored.radii || "uk-radii-md");
+                html.classList.add(stored.shadows || "uk-shadows-sm");
+                html.classList.add(stored.font || "uk-font-sm");
+            } catch(e) {}
+        })();
+    </script>
+
+    <!-- Franken UI CDN -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/franken-ui@2.1.2/dist/css/core.min.css">
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/franken-ui@2.1.2/dist/css/utilities.min.css"
+    />
+    <link rel="stylesheet" href="/static/css/custom.css">
+    <script
+      src="https://cdn.jsdelivr.net/npm/franken-ui@2.1.2/dist/js/core.iife.js"
+      type="module"
+    ></script>
+    <!-- HTMX -->
     <script src="/static/js/htmx.min.js"></script>
-    <link rel="stylesheet" href="/static/css/style.css?v=2">
+
     {% block extra_head %}{% endblock %}
 </head>
-<body>
-    <nav>
-        <a href="/">{{ _("nav.video_bank") }}</a>
-        <a href="/videos">{{ _("nav.videos") }}</a>
-        <a href="/upload">{{ _("nav.upload") }}</a>
-        <a href="/settings">{{ _("nav.settings") }}</a>
-        <span id="space-indicator" style="margin-left: auto;" hx-get="/api/space" hx-trigger="load"></span>
+<body class="bg-background text-foreground">
+    <nav class="border-b bg-background flex items-center gap-4 px-6 py-3">
+        <a href="/" class="text-foreground/80 hover:text-foreground font-semibold no-underline">{{ _("nav.video_bank") }}</a>
+        <a href="/videos" class="text-foreground/80 hover:text-foreground font-semibold no-underline">{{ _("nav.videos") }}</a>
+        <a href="/upload" class="text-foreground/80 hover:text-foreground font-semibold no-underline">{{ _("nav.upload") }}</a>
+        <a href="/settings" class="text-foreground/80 hover:text-foreground font-semibold no-underline">{{ _("nav.settings") }}</a>
 
-        <!-- Language dropdown -->
-        <div class="lang-dropdown">
-            <button class="lang-btn" id="lang-btn" type="button">
-                <span class="lang-flag">{{ current_flag }}</span>
-                <span class="lang-code">{{ current_lang.upper() }}</span>
-                <span class="lang-arrow">▼</span>
+        <span id="space-indicator" class="ml-auto" hx-get="/api/space" hx-trigger="load"></span>
+
+        <!-- Language dropdown (Franken UI dropdown with mode: click) -->
+        <div class="uk-inline ml-2">
+            <button class="uk-btn uk-btn-ghost uk-btn-sm" type="button">
+                {{ current_flag }} {{ current_lang.upper() }}
+                <span class="ml-1 text-xs opacity-70">&#9660;</span>
             </button>
-            <div class="lang-menu" id="lang-menu">
-                <a hx-post="/api/lang" hx-vals='{"lang": "en"}' hx-target="body">
-                    <span class="lang-flag">🇬🇧</span>{{ _("lang.en") }}
-                </a>
-                <a hx-post="/api/lang" hx-vals='{"lang": "fr"}' hx-target="body">
-                    <span class="lang-flag">🇫🇷</span>{{ _("lang.fr") }}
-                </a>
+            <div class="uk-drop uk-dropdown min-w-36" data-uk-dropdown="mode: click; animation: uk-anmt-slide-top-sm">
+                <ul class="uk-nav uk-nav-dropdown">
+                    <li><a hx-post="/api/lang" hx-vals='{"lang": "en"}' hx-target="body">&#127468;&#127463; {{ _("lang.en") }}</a></li>
+                    <li><a hx-post="/api/lang" hx-vals='{"lang": "fr"}' hx-target="body">&#127467;&#127479; {{ _("lang.fr") }}</a></li>
+                </ul>
             </div>
         </div>
     </nav>
-    <div class="container">
+
+    <main class="uk-container py-8">
         {% block content %}{% endblock %}
-    </div>
+    </main>
+
     {% include "_upload_popup.html" %}
 
     <!-- i18n translations for JavaScript -->
@@ -51,34 +81,21 @@
             "btn.create_clip": "{{ _('btn.create_clip') }}",
             "clip.min_duration": "{{ _('clip.min_duration') }}",
             "clip.failed": "{{ _('clip.failed') }}",
-            "clip.network_error": "{{ _('clip.network_error') }}"
+            "clip.network_error": "{{ _('clip.network_error') }}",
+            "clip.cutting": "{{ _('clip.cutting') }}",
+            "clip.cut_failed": "{{ _('clip.cut_failed') }}",
+            "clip.cut_complete": "{{ _('clip.cut_complete') }}"
         };
         window._ = function(key) {
             return window.TRANSLATIONS[key] || key;
         };
     </script>
 
-    <!-- Language dropdown toggle -->
-    <script>
-        (function() {
-            var btn = document.getElementById('lang-btn');
-            var menu = document.getElementById('lang-menu');
-            if (btn && menu) {
-                btn.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    menu.classList.toggle('open');
-                });
-                document.addEventListener('click', function() {
-                    menu.classList.remove('open');
-                });
-                menu.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                });
-            }
-        })();
-    </script>
+    <!-- Franken UI JS -->
+    <script src="https://cdn.jsdelivr.net/npm/[email protected]/dist/js/uikit.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/[email protected]/dist/js/uikit-icons.min.js"></script>
 
-    <script src="/static/js/upload.js?v=2"></script>
-    <script src="/static/js/clipper.js?v=2"></script>
+    <script src="/static/js/upload.js"></script>
+    <script src="/static/js/clipper.js"></script>
 </body>
 </html>

@@ -8,16 +8,18 @@ Relies on ffmpeg/ffprobe being available on the system PATH
 import asyncio
 import logging
 import math
-import aiosqlite
 import shutil
 import uuid
 from pathlib import Path
+
+import aiosqlite
 
 from app.services import file_service, tag_service, video_service
 
 logger = logging.getLogger(__name__)
 
 # ── Helpers ──────────────────────────────────────────────────────
+
 
 async def _get_video_duration(video_path: Path) -> float | None:
     """Return video duration in seconds via ffprobe, or None if unavailable."""
@@ -27,9 +29,12 @@ async def _get_video_duration(video_path: Path) -> float | None:
 
     proc = await asyncio.create_subprocess_exec(
         ffprobe,
-        "-v", "error",
-        "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
         str(video_path),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -70,7 +75,188 @@ def _generate_clip_filename(source_filename: str, start: float, end: float) -> s
     return f"clip_{stem}_{start_str}_{end_str}_{short_id}{ext}"
 
 
+# ── Helper: run ffmpeg subprocess ────────────────────────────────
+
+
+async def _run_ffmpeg(args: list[str]) -> bytes:
+    """Run ffmpeg with the given args.  Raises RuntimeError on failure.
+
+    The ``-y`` flag is prepended automatically.  *args* must **not**
+    contain the ffmpeg binary path (it is resolved via ``shutil.which``).
+    Returns stderr output for diagnostics.
+    """
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        raise RuntimeError("ffmpeg not found. Install with: sudo apt install ffmpeg")
+
+    proc = await asyncio.create_subprocess_exec(
+        ffmpeg,
+        "-y",
+        *args,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr = await proc.communicate()
+
+    if proc.returncode != 0:
+        error_msg = stderr.decode().strip() if stderr else "Unknown ffmpeg error"
+        raise RuntimeError(f"ffmpeg failed: {error_msg}")
+
+    return stderr
+
+
+async def _has_audio_stream(video_path: Path) -> bool:
+    """Return True if the video has at least one audio stream."""
+    ffprobe = shutil.which("ffprobe")
+    if ffprobe is None:
+        return False
+    proc = await asyncio.create_subprocess_exec(
+        ffprobe,
+        "-v",
+        "error",
+        "-select_streams",
+        "a:0",
+        "-show_entries",
+        "stream=codec_type",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        str(video_path),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, _ = await proc.communicate()
+    return proc.returncode == 0 and stdout.decode().strip() == "audio"
+
+
+# ── Cut (in-place trim) ──────────────────────────────────────────
+
+
+async def cut_video(
+    db: aiosqlite.Connection,
+    video_id: int,
+    start_time: float,
+    end_time: float,
+) -> dict:
+    """Remove the segment [start_time, end_time] from a video in-place.
+
+    Uses keyframe-accurate (stream copy) cutting via ``-c copy`` for
+    all three cases.  This is fast (no re-encode) but cuts snap to
+    the nearest keyframes — use the frame-accurate re-encode approach
+    if sub-keyframe precision is required.
+
+    * **Trim from end only** (start == 0): use ``-t`` duration.
+    * **Trim from start only** (end == duration): use ``-ss`` seek.
+    * **Cut a middle segment** (both edges): extract each keep-range
+      as a temp file, then stitch via the concat demuxer.
+
+    The DB record is updated with the new file size, and the thumbnail
+    is regenerated.
+    """
+    import tempfile
+    import shutil as sh_mod
+
+    # 1. Fetch video
+    video = await video_service.get_video(db, video_id)
+    if video is None:
+        raise ValueError(f"Video with id {video_id} not found.")
+
+    video_path = file_service.get_video_path(video["filename"])
+    ext = Path(video["filename"]).suffix
+    stem = Path(video["filename"]).stem
+
+    # 2. Validate times and get duration
+    duration = await _get_video_duration(video_path)
+    _validate_times(start_time, end_time, duration)
+
+    # Prevent removing the entire video
+    if start_time <= 0 and end_time >= (duration or 0):
+        raise ValueError("Cannot remove the entire video.")
+
+    # Determine which segments to keep
+    has_before = start_time > 0
+    has_after = end_time < (duration or 0)
+
+    tmp_path = video_path.with_name(f"{stem}_cut_tmp{ext}")
+
+    try:
+        if has_before and has_after:
+            # ── Middle cut: extract both keep-ranges then concat ──
+            _tmpdir = Path(tempfile.mkdtemp())
+            try:
+                part1 = _tmpdir / f"part1{ext}"
+                part2 = _tmpdir / f"part2{ext}"
+                concat_txt = _tmpdir / "concat.txt"
+
+                await _run_ffmpeg([
+                    "-i", str(video_path), "-t", str(start_time),
+                    "-c", "copy", "-map", "0:v", "-map", "0:a?",
+                    str(part1),
+                ])
+                await _run_ffmpeg([
+                    "-ss", str(end_time), "-i", str(video_path),
+                    "-c", "copy", "-map", "0:v", "-map", "0:a?",
+                    str(part2),
+                ])
+                concat_txt.write_text(f"file '{part1}'\nfile '{part2}'\n")
+                await _run_ffmpeg([
+                    "-f", "concat", "-safe", "0",
+                    "-i", str(concat_txt),
+                    "-c", "copy",
+                    str(tmp_path),
+                ])
+            finally:
+                sh_mod.rmtree(_tmpdir)
+
+        elif has_before:
+            # ── Trim end only: keep [0, start_time) ─────────────────
+            await _run_ffmpeg([
+                "-i", str(video_path), "-t", str(start_time),
+                "-c", "copy", "-map", "0:v", "-map", "0:a?",
+                str(tmp_path),
+            ])
+
+        else:
+            # ── Trim start only: keep [end_time, duration) ─────────
+            await _run_ffmpeg([
+                "-ss", str(end_time), "-i", str(video_path),
+                "-c", "copy", "-map", "0:v", "-map", "0:a?",
+                str(tmp_path),
+            ])
+
+        if not tmp_path.exists():
+            raise RuntimeError("ffmpeg completed but output file was not created.")
+
+        # 3. Replace original with trimmed version (atomic on same filesystem)
+        tmp_path.replace(video_path)
+
+        new_size = video_path.stat().st_size
+
+        # 4. Update DB
+        await db.execute(
+            "UPDATE videos SET file_size = ? WHERE id = ?",
+            (new_size, video_id),
+        )
+        await db.commit()
+
+        # 5. Regenerate thumbnail
+        await file_service.generate_thumbnail(video["filename"])
+
+    except Exception:
+        if tmp_path.exists():
+            tmp_path.unlink()
+        raise
+
+    logger.info(
+        "Video cut: id=%d removed [%.1fs-%.1fs]",
+        video_id,
+        start_time,
+        end_time,
+    )
+    return await video_service.get_video(db, video_id)
+
+
 # ── Public API ───────────────────────────────────────────────────
+
 
 async def create_clip(
     db: aiosqlite.Connection,
@@ -109,9 +295,7 @@ async def create_clip(
     # 4. Run ffmpeg
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg is None:
-        raise RuntimeError(
-            "ffmpeg not found. Install with: sudo apt install ffmpeg"
-        )
+        raise RuntimeError("ffmpeg not found. Install with: sudo apt install ffmpeg")
 
     # NOTE: -c copy uses stream copy (fast but keyframe-aligned).
     # For frame-accurate cuts, replace with re-encode:
@@ -120,10 +304,14 @@ async def create_clip(
     proc = await asyncio.create_subprocess_exec(
         ffmpeg,
         "-y",
-        "-ss", f"{start_time:.3f}",
-        "-i", str(source_path),
-        "-t", f"{clip_duration:.3f}",
-        "-c", "copy",
+        "-ss",
+        f"{start_time:.3f}",
+        "-i",
+        str(source_path),
+        "-t",
+        f"{clip_duration:.3f}",
+        "-c",
+        "copy",
         str(clip_path),
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.PIPE,
@@ -137,7 +325,8 @@ async def create_clip(
             clip_path.unlink()
         logger.error(
             "ffmpeg failed for clip from video %d: %s",
-            source_video_id, error_msg,
+            source_video_id,
+            error_msg,
         )
         raise RuntimeError(f"ffmpeg failed: {error_msg}")
 
@@ -182,6 +371,9 @@ async def create_clip(
     # 8. Return new video
     logger.info(
         "Clip created: id=%d from video=%d [%.1fs-%.1fs]",
-        clip_id, source_video_id, start_time, end_time,
+        clip_id,
+        source_video_id,
+        start_time,
+        end_time,
     )
     return await video_service.get_video(db, clip_id)

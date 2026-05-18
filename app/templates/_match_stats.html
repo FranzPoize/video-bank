@@ -1,73 +1,63 @@
 <div id="match-stats">
-    <h3 style="margin-bottom: 0.75rem;">{{ _("match.box_score") }}</h3>
-    <div class="stats-table-wrapper">
-        <table class="stats-table">
+    <h3 class="uk-h2 mb-4">{{ _("match.box_score") }}</h3>
+    <div class="uk-overflow-auto mb-2">
+        <table class="uk-table uk-table-sm uk-table-divider text-xs min-w-[700px]">
             <thead>
                 <tr>
-                    <th>{{ _("stat.mp") }}</th>
-                    <th>{{ _("stat.pts") }}</th>
-                    <th>{{ _("stat.fga") }}</th>
-                    <th>{{ _("stat.fgm") }}</th>
-                    <th>{{ _("stat.fg_pct") }}</th>
-                    <th>{{ _("stat.two_pa") }}</th>
-                    <th>{{ _("stat.two_pm") }}</th>
-                    <th>{{ _("stat.two_pct") }}</th>
-                    <th>{{ _("stat.three_pa") }}</th>
-                    <th>{{ _("stat.three_pm") }}</th>
-                    <th>{{ _("stat.three_pct") }}</th>
-                    <th>{{ _("stat.fta") }}</th>
-                    <th>{{ _("stat.ftm") }}</th>
-                    <th>{{ _("stat.ft_pct") }}</th>
-                    <th>{{ _("stat.orb") }}</th>
-                    <th>{{ _("stat.drb") }}</th>
-                    <th>{{ _("stat.trb") }}</th>
-                    <th>{{ _("stat.ast") }}</th>
-                    <th>{{ _("stat.stl") }}</th>
-                    <th>{{ _("stat.blk") }}</th>
-                    <th>{{ _("stat.tov") }}</th>
-                    <th>{{ _("stat.pf") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.mp") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.pts") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.fga") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.fgm") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.fg_pct") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.two_pa") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.two_pm") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.two_pct") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.three_pa") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.three_pm") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.three_pct") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.fta") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.ftm") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.ft_pct") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.efg") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.ts") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.orb") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.drb") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.trb") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.ast") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.stl") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.blk") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.tov") }}</th>
+                    <th class="bg-muted text-muted-foreground text-center font-semibold whitespace-nowrap px-1.5 py-2 text-[0.7rem]">{{ _("stat.pf") }}</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody class="[&_tr:hover]:bg-accent/50">
                 <tr>
-                    <td>{{ match.minutes_played if match.minutes_played is not none else "—" }}</td>
-                    <td class="stat-pts">{{ match.points if match.points is not none else "—" }}</td>
-                    <td>{{ computed.fg_attempts }}</td>
-                    <td>{{ computed.fg_made }}</td>
-                    <td>{% if computed.fg_pct is not none %}{{ "%.1f"|format(computed.fg_pct) }}%{% else %}—{% endif %}</td>
-                    <td>{{ match.two_point_attempts if match.two_point_attempts is not none else "—" }}</td>
-                    <td>{{ match.two_point_made if match.two_point_made is not none else "—" }}</td>
-                    <td>{% if computed.two_pct is not none %}{{ "%.1f"|format(computed.two_pct) }}%{% else %}—{% endif %}</td>
-                    <td>{{ match.three_point_attempts if match.three_point_attempts is not none else "—" }}</td>
-                    <td>{{ match.three_point_made if match.three_point_made is not none else "—" }}</td>
-                    <td>{% if computed.three_pct is not none %}{{ "%.1f"|format(computed.three_pct) }}%{% else %}—{% endif %}</td>
-                    <td>{{ match.free_throw_attempts if match.free_throw_attempts is not none else "—" }}</td>
-                    <td>{{ match.free_throw_made if match.free_throw_made is not none else "—" }}</td>
-                    <td>{% if computed.ft_pct is not none %}{{ "%.1f"|format(computed.ft_pct) }}%{% else %}—{% endif %}</td>
-                    <td>{{ match.offensive_rebounds if match.offensive_rebounds is not none else "—" }}</td>
-                    <td>{{ match.defensive_rebounds if match.defensive_rebounds is not none else "—" }}</td>
-                    <td>{{ match.total_rebounds if match.total_rebounds is not none else "—" }}</td>
-                    <td>{{ match.assists if match.assists is not none else "—" }}</td>
-                    <td>{{ match.steals if match.steals is not none else "—" }}</td>
-                    <td>{{ match.blocks if match.blocks is not none else "—" }}</td>
-                    <td>{{ match.turnovers if match.turnovers is not none else "—" }}</td>
-                    <td>{{ match.personal_fouls if match.personal_fouls is not none else "—" }}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{{ match.minutes_played if match.minutes_played is not none else "—" }}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border font-bold text-destructive">{{ match.points if match.points is not none else "—" }}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{{ computed.fg_attempts }}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{{ computed.fg_made }}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{% if computed.fg_pct is not none %}{{ "%.1f"|format(computed.fg_pct) }}%{% else %}—{% endif %}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{{ match.two_point_attempts if match.two_point_attempts is not none else "—" }}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{{ match.two_point_made if match.two_point_made is not none else "—" }}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{% if computed.two_pct is not none %}{{ "%.1f"|format(computed.two_pct) }}%{% else %}—{% endif %}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{{ match.three_point_attempts if match.three_point_attempts is not none else "—" }}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{{ match.three_point_made if match.three_point_made is not none else "—" }}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{% if computed.three_pct is not none %}{{ "%.1f"|format(computed.three_pct) }}%{% else %}—{% endif %}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{{ match.free_throw_attempts if match.free_throw_attempts is not none else "—" }}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{{ match.free_throw_made if match.free_throw_made is not none else "—" }}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{% if computed.ft_pct is not none %}{{ "%.1f"|format(computed.ft_pct) }}%{% else %}—{% endif %}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{% if computed.efg_pct is not none %}{{ "%.1f"|format(computed.efg_pct) }}%{% else %}—{% endif %}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{% if computed.ts_pct is not none %}{{ "%.1f"|format(computed.ts_pct) }}%{% else %}—{% endif %}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{{ match.offensive_rebounds if match.offensive_rebounds is not none else "—" }}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{{ match.defensive_rebounds if match.defensive_rebounds is not none else "—" }}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{{ match.total_rebounds if match.total_rebounds is not none else "—" }}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{{ match.assists if match.assists is not none else "—" }}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{{ match.steals if match.steals is not none else "—" }}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{{ match.blocks if match.blocks is not none else "—" }}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{{ match.turnovers if match.turnovers is not none else "—" }}</td>
+                    <td class="text-center px-1.5 py-2 whitespace-nowrap border-b border-border">{{ match.personal_fouls if match.personal_fouls is not none else "—" }}</td>
                 </tr>
             </tbody>
         </table>
-    </div>
-
-    <div class="advanced-stats">
-        <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem;">{{ _("match.advanced_stats") }}</h3>
-        <div class="advanced-stats-row">
-            <div class="advanced-stat">
-                <span class="advanced-stat-label">{{ _("stat.efg") }}</span>
-                <span class="advanced-stat-value">{% if computed.efg_pct is not none %}{{ "%.1f"|format(computed.efg_pct) }}%{% else %}—{% endif %}</span>
-            </div>
-            <div class="advanced-stat">
-                <span class="advanced-stat-label">{{ _("stat.ts") }}</span>
-                <span class="advanced-stat-value">{% if computed.ts_pct is not none %}{{ "%.1f"|format(computed.ts_pct) }}%{% else %}—{% endif %}</span>
-            </div>
-        </div>
     </div>
 </div>

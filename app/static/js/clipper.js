@@ -18,6 +18,12 @@
   const TIMES_ID = "clip-times";
   const BTN_ID = "create-clip-btn";
   const ERROR_ID = "clip-error";
+  const SET_BEGIN_ID = "set-begin-btn";
+  const SET_END_ID = "set-end-btn";
+  const CUT_BTN_ID = "cut-btn";
+  const CUT_CONFIRM_OVERLAY_ID = "cut-confirm-overlay";
+  const CUT_CONFIRM_BTN_ID = "cut-confirm-btn";
+  const CUT_CANCEL_BTN_ID = "cut-cancel-btn";
   const MIN_DURATION = 1; // seconds
 
   let video = null;
@@ -26,6 +32,12 @@
   let timesDisplay = null;
   let btn = null;
   let errorDisplay = null;
+  let setBeginBtn = null;
+  let setEndBtn = null;
+  let cutBtn = null;
+  let cutConfirmOverlay = null;
+  let cutConfirmBtn = null;
+  let cutCancelBtn = null;
   let duration = 0;
 
   // ── Display update ────────────────────────────────────────────
@@ -45,22 +57,27 @@
     const end = parseFloat(endInput.value);
     const dur = Math.max(0, end - start);
     timesDisplay.textContent =
-      formatTime(start) + " / " + formatTime(end) + " (" + formatTime(dur) + ")";
+      formatTime(start) +
+      " / " +
+      formatTime(end) +
+      " (" +
+      formatTime(dur) +
+      ")";
   }
 
   // ── Constraint enforcement ─────────────────────────────────────
 
-  function constrainHandles() {
+  function constrainHandles(e) {
     if (!startInput || !endInput) return;
     let start = parseFloat(startInput.value);
     let end = parseFloat(endInput.value);
 
     // Start must not exceed (end - MIN_DURATION)
-    if (start > end - MIN_DURATION) {
+    if (e.currentTarget == endInput && start > end - MIN_DURATION) {
       start = Math.max(0, end - MIN_DURATION);
     }
     // End must not be less than (start + MIN_DURATION)
-    if (end < start + MIN_DURATION) {
+    if (e.currentTarget == startInput && end < start + MIN_DURATION) {
       end = Math.min(duration, start + MIN_DURATION);
     }
 
@@ -89,6 +106,46 @@
     const clickX = event.clientX - rect.left;
     const ratio = clickX / rect.width;
     const time = ratio * duration;
+    seekVideo(time);
+  }
+
+  // ── Set handle to current video time ───────────────────────────
+
+  function setHandleToCurrentTime(isStart) {
+    if (!video || !duration) return;
+    const time = video.currentTime;
+
+    if (isStart) {
+      let start = time;
+      let end = parseFloat(endInput.value);
+      // If start would leave less than MIN_DURATION, push end forward
+      if (start > end - MIN_DURATION) {
+        end = Math.min(duration, start + MIN_DURATION);
+        // If pushing pushed end past max, clamp start back instead
+        if (end > duration) {
+          end = duration;
+          start = Math.max(0, end - MIN_DURATION);
+        }
+      }
+      startInput.value = start.toFixed(1);
+      endInput.value = end.toFixed(1);
+    } else {
+      let end = time;
+      let start = parseFloat(startInput.value);
+      // If end would leave less than MIN_DURATION, push start back
+      if (end < start + MIN_DURATION) {
+        start = Math.max(0, end - MIN_DURATION);
+        // If pushing pushed start below 0, clamp end forward instead
+        if (start < 0) {
+          start = 0;
+          end = Math.min(duration, start + MIN_DURATION);
+        }
+      }
+      startInput.value = start.toFixed(1);
+      endInput.value = end.toFixed(1);
+    }
+
+    updateDisplay();
     seekVideo(time);
   }
 
@@ -140,6 +197,96 @@
     }
   }
 
+  // ── Cut (in-place) ──────────────────────────────────────────────
+
+  function onCut() {
+    if (!startInput || !endInput || !errorDisplay) return;
+
+    // Client-side validation
+    if (parseFloat(endInput.value) - parseFloat(startInput.value) < MIN_DURATION) {
+      errorDisplay.textContent = _("clip.min_duration");
+      return;
+    }
+
+    errorDisplay.textContent = "";
+
+    // Show confirm modal (text is server-rendered in the template)
+    cutConfirmOverlay.classList.remove("hidden");
+  }
+
+  function cancelCut() {
+    cutConfirmOverlay.classList.add("hidden");
+  }
+
+  async function executeCut() {
+    cutConfirmOverlay.classList.add("hidden");
+
+    if (!cutBtn || !startInput || !endInput || !errorDisplay) return;
+    const videoId = cutBtn.getAttribute("data-video-id");
+    if (!videoId) return;
+
+    const start = parseFloat(startInput.value);
+    const end = parseFloat(endInput.value);
+
+    cutBtn.disabled = true;
+    errorDisplay.textContent = "";
+
+    // Show cutting-in-progress notification (persistent)
+    var cutNotification = UIkit.notification({
+      message: _("clip.cutting"),
+      status: "primary",
+      pos: "bottom-left",
+      timeout: 0
+    });
+
+    try {
+      const response = await fetch("/api/videos/" + videoId + "/cut", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        body: JSON.stringify({ start: start, end: end }),
+      });
+
+      const data = await response.json();
+
+      // Close progress notification
+      cutNotification.close();
+
+      if (!response.ok) {
+        UIkit.notification({
+          message: "✗ " + (data.error || _("clip.cut_failed")),
+          status: "destructive",
+          pos: "bottom-left",
+          timeout: 0
+        });
+        cutBtn.disabled = false;
+        return;
+      }
+
+      // Success — brief success notification, then redirect
+      UIkit.notification({
+        message: "✓ " + _("clip.cut_complete"),
+        status: "success",
+        pos: "bottom-left",
+        timeout: 3000
+      });
+      setTimeout(function () {
+        window.location.href = "/videos/" + data.id;
+      }, 2000);
+    } catch (err) {
+      cutNotification.close();
+      UIkit.notification({
+        message: "✗ " + _("clip.network_error"),
+        status: "destructive",
+        pos: "bottom-left",
+        timeout: 0
+      });
+      cutBtn.disabled = false;
+    }
+  }
+
   // ── Init ───────────────────────────────────────────────────────
 
   function init() {
@@ -149,6 +296,12 @@
     timesDisplay = document.getElementById(TIMES_ID);
     btn = document.getElementById(BTN_ID);
     errorDisplay = document.getElementById(ERROR_ID);
+    setBeginBtn = document.getElementById(SET_BEGIN_ID);
+    setEndBtn = document.getElementById(SET_END_ID);
+    cutBtn = document.getElementById(CUT_BTN_ID);
+    cutConfirmOverlay = document.getElementById(CUT_CONFIRM_OVERLAY_ID);
+    cutConfirmBtn = document.getElementById(CUT_CONFIRM_BTN_ID);
+    cutCancelBtn = document.getElementById(CUT_CANCEL_BTN_ID);
 
     if (!video || !startInput || !endInput) return;
 
@@ -183,6 +336,29 @@
     // Submit button
     if (btn) {
       btn.addEventListener("click", onSubmit);
+    }
+
+    // Cut button
+    if (cutBtn) {
+      cutBtn.addEventListener("click", onCut);
+    }
+    if (cutConfirmBtn) {
+      cutConfirmBtn.addEventListener("click", executeCut);
+    }
+    if (cutCancelBtn) {
+      cutCancelBtn.addEventListener("click", cancelCut);
+    }
+
+    // Set-begin / set-end buttons
+    if (setBeginBtn) {
+      setBeginBtn.addEventListener("click", function () {
+        setHandleToCurrentTime(true);
+      });
+    }
+    if (setEndBtn) {
+      setEndBtn.addEventListener("click", function () {
+        setHandleToCurrentTime(false);
+      });
     }
   }
 

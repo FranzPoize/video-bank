@@ -361,3 +361,48 @@ async def create_clip(
         return JSONResponse({"error": str(e)}, status_code=500)
 
     return JSONResponse({"id": clip["id"], "redirect": f"/videos/{clip['id']}"})
+
+
+@router.post("/api/videos/{video_id}/cut")
+async def cut_video(
+    request: Request,
+    video_id: int,
+    db=Depends(get_db),
+):
+    """Remove a segment from a video in-place. Accepts JSON body with start/end."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body.")
+
+    start = body.get("start")
+    end = body.get("end")
+
+    if start is None or end is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Both 'start' and 'end' fields are required.",
+        )
+
+    try:
+        start = float(start)
+        end = float(end)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=400,
+            detail="'start' and 'end' must be numeric values.",
+        )
+
+    # Check video exists (404 vs 400)
+    video = await video_service.get_video(db, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    try:
+        updated = await clip_service.cut_video(db, video_id, start, end)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except RuntimeError as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+    return JSONResponse({"id": updated["id"], "redirect": f"/videos/{updated['id']}"})

@@ -119,6 +119,120 @@ class TestClipPage:
         assert "My Awesome Video" in response.text
 
 
+# ── Cut endpoint tests ───────────────────────────────────────────
+
+class TestCutValidation:
+    """Tests for cut validation (no ffmpeg needed)."""
+
+    @pytest.mark.asyncio
+    async def test_cut_invalid_json(self, client, db):
+        """POST with non-JSON body returns 400."""
+        video_id = await create_test_video(client, "Source", "")
+        response = await client.post(
+            f"/api/videos/{video_id}/cut",
+            content="not-json",
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_cut_missing_fields(self, client, db):
+        """POST without start/end returns 400."""
+        video_id = await create_test_video(client, "Source", "")
+        response = await client.post(
+            f"/api/videos/{video_id}/cut",
+            content=json.dumps({}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_cut_nonexistent_video(self, client, db):
+        """POST for non-existent video returns 404."""
+        response = await client.post(
+            "/api/videos/999/cut",
+            content=json.dumps({"start": 0, "end": 5}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_cut_non_numeric_times(self, client, db):
+        """POST with non-numeric times returns 400."""
+        video_id = await create_test_video(client, "Source", "")
+        response = await client.post(
+            f"/api/videos/{video_id}/cut",
+            content=json.dumps({"start": "abc", "end": "def"}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_cut_start_after_end(self, client, db):
+        """POST with start > end returns 400."""
+        video_id = await create_test_video(client, "Source", "")
+        response = await client.post(
+            f"/api/videos/{video_id}/cut",
+            content=json.dumps({"start": 30, "end": 10}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.status_code == 400
+        data = response.json()
+        assert "Start must be before end" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_cut_minimum_duration(self, client, db):
+        """POST with duration < 1s returns 400."""
+        video_id = await create_test_video(client, "Source", "")
+        response = await client.post(
+            f"/api/videos/{video_id}/cut",
+            content=json.dumps({"start": 5, "end": 5.5}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.status_code == 400
+        data = response.json()
+        assert "Minimum clip duration" in data["error"]
+
+
+@pytest.mark.usefixtures("db")
+class TestCutWithMock:
+    """Tests that mock ffmpeg/ffprobe for end-to-end cut."""
+
+    @pytest.mark.asyncio
+    async def test_cut_success(self, client, db):
+        """Successful cut calls ffmpeg and redirects to video detail."""
+        video_id = await create_test_video(client, "Source Vid", "alpha")
+
+        with mock_ffmpeg(source_filename="src", has_audio=True):
+            response = await client.post(
+                f"/api/videos/{video_id}/cut",
+                content=json.dumps({"start": 10, "end": 20}),
+                headers={"Content-Type": "application/json"},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "id" in data
+        assert data["id"] == video_id  # same video, modified in-place
+
+    @pytest.mark.asyncio
+    async def test_cut_ffmpeg_failure_returns_500(self, client, db):
+        """When ffmpeg fails, cut endpoint returns 500."""
+        video_id = await create_test_video(client, "Failing Source", "")
+
+        # start=0, end=10 → has_after only → 3 subprocess calls now
+        with mock_ffmpeg(source_filename="fail", returncode=1, has_audio=True):
+            response = await client.post(
+                f"/api/videos/{video_id}/cut",
+                content=json.dumps({"start": 0, "end": 10}),
+                headers={"Content-Type": "application/json"},
+            )
+
+        assert response.status_code == 500
+        data = response.json()
+        assert "error" in data
+
+
 @pytest.mark.usefixtures("db")
 class TestClipCreationWithMock:
     """Tests that mock ffmpeg/ffprobe for end-to-end clip creation."""

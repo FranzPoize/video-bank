@@ -2,26 +2,26 @@
 {% block title %}{{ video.name }} — {{ _("nav.video_bank") }}{% endblock %}
 
 {% block content %}
-<div class="video-wrapper">
+<div class="mx-auto max-w-6xl">
     <div class="page-header">
         <div>
-            <a href="/videos" style="color: #4361ee; text-decoration: none; display: inline-block; margin-bottom: 0.5rem;">{{ _("link.back_to_videos") }}</a>
-            <h1 style="margin-bottom: 0.25rem;">{{ video.name }}</h1>
-            <p style="color: #888; font-size: 0.9rem;">
+            <a href="/videos" class="text-primary no-underline hover:underline inline-block mb-2">{{ _("link.back_to_videos") }}</a>
+            <h1 class="uk-h3 mb-1">{{ video.name }}</h1>
+            <p class="text-muted-foreground text-sm">
                 {{ _("video.uploaded") }} {{ video.upload_date }} &middot; {{ "%.1f"|format(video.file_size / (1024*1024)) }} {{ _("video.mb") }}
             </p>
         </div>
         <div class="actions">
-            <a href="/videos/{{ video.id }}/clip" class="btn btn-primary btn-sm">{{ _("btn.clip") }}</a>
-            <a href="/videos/{{ video.id }}/edit" class="btn btn-primary btn-sm">{{ _("btn.edit") }}</a>
+            <a href="/videos/{{ video.id }}/clip" class="uk-btn uk-btn-primary uk-btn-sm">{{ _("btn.clip") }}</a>
+            <a href="/videos/{{ video.id }}/edit" class="uk-btn uk-btn-primary uk-btn-sm">{{ _("btn.edit") }}</a>
         </div>
     </div>
 
     {% if video_matches and video_matches|length > 0 %}
-    <div class="match-context">
-        <h3>{{ _("match.linked_matches") }}</h3>
+    <div class="bg-muted/50 rounded-lg p-3 mb-6">
+        <h3 class="text-sm text-muted-foreground mb-2">{{ _("match.linked_matches") }}</h3>
         {% for m in video_matches %}
-        <a href="/matches/{{ m.id }}" class="match-context-item">
+        <a href="/matches/{{ m.id }}" class="inline-block mr-3 mb-1 px-3 py-1 bg-card rounded text-sm text-primary shadow-sm hover:bg-accent no-underline">
             {{ m.name }} ({{ m.match_date }})
         </a>
         {% endfor %}
@@ -36,13 +36,11 @@
     </div>
 
     {% if video.tags and video.tags|length > 0 %}
-    <div style="margin-bottom: 1.5rem;">
-        <h3 style="font-size: 0.9rem; color: #888; margin-bottom: 0.5rem;">{{ _("video.tags_heading") }}</h3>
-        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+    <div class="mb-6">
+        <h3 class="text-sm text-muted-foreground mb-2">{{ _("video.tags_heading") }}</h3>
+        <div class="flex flex-wrap gap-2">
             {% for tag in video.tags %}
-            <span style="background: #e0e7ff; color: #4361ee; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.85rem;">
-                {{ tag }}
-            </span>
+            <span class="uk-badge uk-badge-primary">{{ tag }}</span>
             {% endfor %}
         </div>
     </div>
