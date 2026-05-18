@@ -103,11 +103,25 @@ def mock_ffmpeg(source_filename="src.mp4", duration=60.0, returncode=0):
                 return type("Stat", (), {"st_size": size})()
 
             def _make_path(exists=True):
-                return type("Path", (), {
-                    "exists": lambda self: exists,
-                    "stat": lambda self: _make_stat(),
-                    "unlink": lambda self: None,
-                })()
+                stats = {"st_size": 1024}
+
+                class MockPath:
+                    def exists(self):
+                        return exists
+
+                    def stat(self):
+                        return type("Stat", (), stats)()
+
+                    def unlink(self):
+                        pass
+
+                    def with_name(self, name):
+                        return _make_path(exists)
+
+                    def replace(self, dest):
+                        pass
+
+                return MockPath()
 
             mock_src_path = _make_path(True)
             mock_clip_path = _make_path(returncode == 0)

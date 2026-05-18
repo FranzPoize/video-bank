@@ -70,6 +70,110 @@ def _generate_clip_filename(source_filename: str, start: float, end: float) -> s
     return f"clip_{stem}_{start_str}_{end_str}_{short_id}{ext}"
 
 
+# ── Cut (in-place trim) ──────────────────────────────────────────
+
+async def cut_video(
+    db: aiosqlite.Connection,
+    video_id: int,
+    start_time: float,
+    end_time: float,
+) -> dict:
+    """Remove the segment [start_time, end_time] from a video in-place.
+
+    Unlike create_clip (which extracts a segment into a new file), this
+    modifies the existing video file by dropping the selected range and
+    re-encoding. The DB record is updated with the new file size, and
+    the thumbnail is regenerated.
+
+    Steps:
+    1. Fetch video metadata from DB
+    2. Validate time bounds
+    3. Run ffmpeg with select filter to drop the range
+    4. Replace original file with the trimmed version
+    5. Update DB record (file_size)
+    6. Regenerate thumbnail
+    """
+    # 1. Fetch video
+    video = await video_service.get_video(db, video_id)
+    if video is None:
+        raise ValueError(f"Video with id {video_id} not found.")
+
+    video_path = file_service.get_video_path(video["filename"])
+
+    # 2. Validate times
+    duration = await _get_video_duration(video_path)
+    _validate_times(start_time, end_time, duration)
+
+    # Prevent removing the entire video
+    if start_time <= 0 and end_time >= (duration or 0):
+        raise ValueError("Cannot remove the entire video.")
+
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        raise RuntimeError(
+            "ffmpeg not found. Install with: sudo apt install ffmpeg"
+        )
+
+    # Temp output file alongside the original
+    ext = Path(video["filename"]).suffix
+    stem = Path(video["filename"]).stem
+    tmp_path = video_path.with_name(f"{stem}_cut_tmp{ext}")
+
+    try:
+        # 3. Run ffmpeg — select frames outside [start, end), re-stamp PTS
+        proc = await asyncio.create_subprocess_exec(
+            ffmpeg,
+            "-y",
+            "-i", str(video_path),
+            "-vf", f"select='not(between(t,{start_time},{end_time}))',setpts=PTS-STARTPTS",
+            "-af", f"aselect='not(between(t,{start_time},{end_time}))',asetpts=PTS-STARTPTS",
+            "-map", "0:v:0",
+            "-map", "0:a:0?",
+            str(tmp_path),
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await proc.communicate()
+
+        if proc.returncode != 0:
+            error_msg = stderr.decode().strip() if stderr else "Unknown ffmpeg error"
+            logger.error(
+                "ffmpeg cut failed for video %d: %s",
+                video_id, error_msg,
+            )
+            raise RuntimeError(f"ffmpeg cut failed: {error_msg}")
+
+        if not tmp_path.exists():
+            raise RuntimeError("ffmpeg completed but output file was not created.")
+
+        # 4. Replace original with trimmed version (atomic on same filesystem)
+        tmp_path.replace(video_path)
+
+        new_size = video_path.stat().st_size
+
+        # 5. Update DB
+        await db.execute(
+            "UPDATE videos SET file_size = ? WHERE id = ?",
+            (new_size, video_id),
+        )
+        await db.commit()
+
+        # 6. Regenerate thumbnail
+        await file_service.generate_thumbnail(video["filename"])
+
+    except Exception:
+        # Clean up temp file on any failure
+        if tmp_path.exists():
+            tmp_path.unlink()
+        raise
+
+    logger.info(
+        "Video cut: id=%d removed [%.1fs-%.1fs]",
+        video_id, start_time, end_time,
+    )
+    return await video_service.get_video(db, video_id)
+
+
 # ── Public API ───────────────────────────────────────────────────
 
 async def create_clip(

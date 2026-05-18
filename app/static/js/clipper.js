@@ -20,6 +20,8 @@
   const ERROR_ID = "clip-error";
   const SET_BEGIN_ID = "set-begin-btn";
   const SET_END_ID = "set-end-btn";
+  const CUT_BTN_ID = "cut-btn";
+  const CUT_PROGRESS_ID = "cut-progress";
   const MIN_DURATION = 1; // seconds
 
   let video = null;
@@ -30,6 +32,8 @@
   let errorDisplay = null;
   let setBeginBtn = null;
   let setEndBtn = null;
+  let cutBtn = null;
+  let cutProgress = null;
   let duration = 0;
 
   // ── Display update ────────────────────────────────────────────
@@ -49,22 +53,27 @@
     const end = parseFloat(endInput.value);
     const dur = Math.max(0, end - start);
     timesDisplay.textContent =
-      formatTime(start) + " / " + formatTime(end) + " (" + formatTime(dur) + ")";
+      formatTime(start) +
+      " / " +
+      formatTime(end) +
+      " (" +
+      formatTime(dur) +
+      ")";
   }
 
   // ── Constraint enforcement ─────────────────────────────────────
 
-  function constrainHandles() {
+  function constrainHandles(e) {
     if (!startInput || !endInput) return;
     let start = parseFloat(startInput.value);
     let end = parseFloat(endInput.value);
 
     // Start must not exceed (end - MIN_DURATION)
-    if (start > end - MIN_DURATION) {
+    if (e.currentTarget == endInput && start > end - MIN_DURATION) {
       start = Math.max(0, end - MIN_DURATION);
     }
     // End must not be less than (start + MIN_DURATION)
-    if (end < start + MIN_DURATION) {
+    if (e.currentTarget == startInput && end < start + MIN_DURATION) {
       end = Math.min(duration, start + MIN_DURATION);
     }
 
@@ -184,6 +193,61 @@
     }
   }
 
+  // ── Cut (in-place) ──────────────────────────────────────────────
+
+  async function onCut() {
+    if (!cutBtn || !startInput || !endInput || !errorDisplay || !cutProgress) return;
+    const videoId = cutBtn.getAttribute("data-video-id");
+    if (!videoId) return;
+
+    const start = parseFloat(startInput.value);
+    const end = parseFloat(endInput.value);
+
+    // Client-side validation
+    if (end - start < MIN_DURATION) {
+      errorDisplay.textContent = _("clip.min_duration");
+      return;
+    }
+
+    // Confirm destructive action
+    if (!confirm(_("clip.cut_confirm"))) return;
+
+    cutBtn.disabled = true;
+    cutBtn.textContent = _("clip.cutting");
+    cutProgress.textContent = _("clip.cutting");
+    cutProgress.classList.remove("hidden");
+    errorDisplay.textContent = "";
+
+    try {
+      const response = await fetch("/api/videos/" + videoId + "/cut", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        body: JSON.stringify({ start: start, end: end }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        errorDisplay.textContent = data.error || _("clip.cut_failed");
+        cutBtn.disabled = false;
+        cutBtn.textContent = _("clip.cut");
+        cutProgress.classList.add("hidden");
+        return;
+      }
+
+      // Success — redirect back to the (now trimmed) video detail
+      window.location.href = "/videos/" + data.id;
+    } catch (err) {
+      errorDisplay.textContent = _("clip.network_error");
+      cutBtn.disabled = false;
+      cutBtn.textContent = _("clip.cut");
+      cutProgress.classList.add("hidden");
+    }
+  }
+
   // ── Init ───────────────────────────────────────────────────────
 
   function init() {
@@ -195,6 +259,8 @@
     errorDisplay = document.getElementById(ERROR_ID);
     setBeginBtn = document.getElementById(SET_BEGIN_ID);
     setEndBtn = document.getElementById(SET_END_ID);
+    cutBtn = document.getElementById(CUT_BTN_ID);
+    cutProgress = document.getElementById(CUT_PROGRESS_ID);
 
     if (!video || !startInput || !endInput) return;
 
@@ -229,6 +295,11 @@
     // Submit button
     if (btn) {
       btn.addEventListener("click", onSubmit);
+    }
+
+    // Cut button
+    if (cutBtn) {
+      cutBtn.addEventListener("click", onCut);
     }
 
     // Set-begin / set-end buttons

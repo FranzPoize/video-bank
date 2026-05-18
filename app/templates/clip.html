@@ -47,13 +47,20 @@
             <!-- Error Display -->
             <div id="clip-error" class="text-destructive text-sm mb-2 text-center"></div>
 
-            <!-- Create Button -->
-            <div class="text-center">
+            <!-- Action Buttons -->
+            <div class="flex justify-center gap-3">
                 <button id="create-clip-btn" class="uk-btn uk-btn-primary px-8 py-3 text-base"
                         data-video-id="{{ video.id }}">
                     {{ _("btn.create_clip") }}
                 </button>
+                <button id="cut-btn" type="button" class="uk-btn uk-btn-danger px-8 py-3 text-base"
+                        data-video-id="{{ video.id }}">
+                    {{ _("clip.cut") }}
+                </button>
             </div>
+
+            <!-- Cut Progress -->
+            <div id="cut-progress" class="hidden text-center mt-3 text-sm text-muted-foreground"></div>
         </div>
     </div>
 </div>
