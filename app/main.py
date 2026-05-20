@@ -22,6 +22,7 @@ LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 # ───────────────────────────────────────────────────────────────────
 
 from app.database import init_db
+from app.routes.auth import router as auth_router
 from app.routes.videos import router as videos_router
 from app.routes.tags import router as tags_router
 from app.routes.matches import router as matches_router
@@ -52,6 +53,7 @@ static_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 # Include routers
+app.include_router(auth_router)
 app.include_router(videos_router)
 app.include_router(tags_router)
 app.include_router(matches_router)
@@ -138,7 +140,7 @@ async def on_startup():
         )
     # ─────────────────────────────────────────────────────────────
 
-    await init_db(migration_version=5)
+    await init_db(migration_version=6)
 
     # Check for ffmpeg (required for clip creation)
     import shutil

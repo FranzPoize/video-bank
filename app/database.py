@@ -97,6 +97,146 @@ IDX_MATCH_VIDEOS_VIDEO = """
 CREATE INDEX IF NOT EXISTS idx_match_videos_video ON match_videos(video_id);
 """
 
+USERS_TABLE = """
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL,
+    normalized_email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    is_email_verified INTEGER NOT NULL DEFAULT 0 CHECK (is_email_verified IN (0, 1)),
+    email_verified_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+ACCOUNTS_TABLE = """
+CREATE TABLE IF NOT EXISTS accounts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    display_name TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+ACCOUNT_MEMBERSHIPS_TABLE = """
+CREATE TABLE IF NOT EXISTS account_memberships (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    manage_videos INTEGER NOT NULL DEFAULT 0 CHECK (manage_videos IN (0, 1)),
+    manage_matches INTEGER NOT NULL DEFAULT 0 CHECK (manage_matches IN (0, 1)),
+    manage_tags INTEGER NOT NULL DEFAULT 0 CHECK (manage_tags IN (0, 1)),
+    manage_account_settings INTEGER NOT NULL DEFAULT 0 CHECK (manage_account_settings IN (0, 1)),
+    manage_members INTEGER NOT NULL DEFAULT 0 CHECK (manage_members IN (0, 1)),
+    admin INTEGER NOT NULL DEFAULT 0 CHECK (admin IN (0, 1)),
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    revoked_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, account_id)
+);
+"""
+
+SESSIONS_TABLE = """
+CREATE TABLE IF NOT EXISTS sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_hash TEXT NOT NULL UNIQUE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    active_account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
+    expires_at TIMESTAMP NOT NULL,
+    revoked_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+EMAIL_VERIFICATION_TOKENS_TABLE = """
+CREATE TABLE IF NOT EXISTS email_verification_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_hash TEXT NOT NULL UNIQUE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TIMESTAMP NOT NULL,
+    used_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+INVITATIONS_TABLE = """
+CREATE TABLE IF NOT EXISTS invitations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    invited_email TEXT NOT NULL,
+    invited_normalized_email TEXT NOT NULL,
+    inviter_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    manage_videos INTEGER NOT NULL DEFAULT 0 CHECK (manage_videos IN (0, 1)),
+    manage_matches INTEGER NOT NULL DEFAULT 0 CHECK (manage_matches IN (0, 1)),
+    manage_tags INTEGER NOT NULL DEFAULT 0 CHECK (manage_tags IN (0, 1)),
+    manage_account_settings INTEGER NOT NULL DEFAULT 0 CHECK (manage_account_settings IN (0, 1)),
+    manage_members INTEGER NOT NULL DEFAULT 0 CHECK (manage_members IN (0, 1)),
+    admin INTEGER NOT NULL DEFAULT 0 CHECK (admin IN (0, 1)),
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMP NOT NULL,
+    accepted_at TIMESTAMP,
+    revoked_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+IDX_USERS_NORMALIZED_EMAIL = """
+CREATE INDEX IF NOT EXISTS idx_users_normalized_email ON users(normalized_email);
+"""
+
+IDX_ACCOUNT_MEMBERSHIPS_USER_ID = """
+CREATE INDEX IF NOT EXISTS idx_account_memberships_user_id ON account_memberships(user_id);
+"""
+
+IDX_ACCOUNT_MEMBERSHIPS_ACCOUNT_ID = """
+CREATE INDEX IF NOT EXISTS idx_account_memberships_account_id ON account_memberships(account_id);
+"""
+
+IDX_ACCOUNT_MEMBERSHIPS_ACTIVE_ACCOUNT = """
+CREATE INDEX IF NOT EXISTS idx_account_memberships_active_account
+ON account_memberships(account_id, is_active, revoked_at);
+"""
+
+IDX_SESSIONS_TOKEN_HASH = """
+CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);
+"""
+
+IDX_SESSIONS_USER_ID = """
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+"""
+
+IDX_SESSIONS_ACTIVE_ACCOUNT_ID = """
+CREATE INDEX IF NOT EXISTS idx_sessions_active_account_id ON sessions(active_account_id);
+"""
+
+IDX_EMAIL_VERIFICATION_TOKENS_TOKEN_HASH = """
+CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_token_hash
+ON email_verification_tokens(token_hash);
+"""
+
+IDX_EMAIL_VERIFICATION_TOKENS_USER_ID = """
+CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user_id
+ON email_verification_tokens(user_id);
+"""
+
+IDX_INVITATIONS_TOKEN_HASH = """
+CREATE INDEX IF NOT EXISTS idx_invitations_token_hash ON invitations(token_hash);
+"""
+
+IDX_INVITATIONS_ACCOUNT_STATE = """
+CREATE INDEX IF NOT EXISTS idx_invitations_account_state
+ON invitations(account_id, accepted_at, revoked_at, expires_at);
+"""
+
+IDX_INVITATIONS_INVITED_NORMALIZED_EMAIL = """
+CREATE INDEX IF NOT EXISTS idx_invitations_invited_normalized_email
+ON invitations(invited_normalized_email);
+"""
+
 # These are applied incrementally per checkpoint
 # Each list element must be a single SQL statement (aiosqlite limitation)
 MIGRATIONS = {
@@ -114,6 +254,26 @@ MIGRATIONS = {
         IDX_MATCHES_DATE,
         IDX_MATCH_VIDEOS_MATCH,
         IDX_MATCH_VIDEOS_VIDEO,
+    ],
+    6: [
+        USERS_TABLE,
+        ACCOUNTS_TABLE,
+        ACCOUNT_MEMBERSHIPS_TABLE,
+        SESSIONS_TABLE,
+        EMAIL_VERIFICATION_TOKENS_TABLE,
+        INVITATIONS_TABLE,
+        IDX_USERS_NORMALIZED_EMAIL,
+        IDX_ACCOUNT_MEMBERSHIPS_USER_ID,
+        IDX_ACCOUNT_MEMBERSHIPS_ACCOUNT_ID,
+        IDX_ACCOUNT_MEMBERSHIPS_ACTIVE_ACCOUNT,
+        IDX_SESSIONS_TOKEN_HASH,
+        IDX_SESSIONS_USER_ID,
+        IDX_SESSIONS_ACTIVE_ACCOUNT_ID,
+        IDX_EMAIL_VERIFICATION_TOKENS_TOKEN_HASH,
+        IDX_EMAIL_VERIFICATION_TOKENS_USER_ID,
+        IDX_INVITATIONS_TOKEN_HASH,
+        IDX_INVITATIONS_ACCOUNT_STATE,
+        IDX_INVITATIONS_INVITED_NORMALIZED_EMAIL,
     ],
 }
 

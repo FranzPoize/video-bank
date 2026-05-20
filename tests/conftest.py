@@ -32,7 +32,7 @@ async def db() -> AsyncGenerator[aiosqlite.Connection, None]:
 
     # Initialize schema directly on this connection
     from app.database import MIGRATIONS
-    for version in range(1, 6):  # migration_version=5 (includes match schema)
+    for version in range(1, 7):  # migration_version=6 (includes user/account schema)
         for stmt in MIGRATIONS.get(version, []):
             await db_conn.execute(stmt)
     await db_conn.commit()

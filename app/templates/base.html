@@ -47,6 +47,24 @@
 
         <span id="space-indicator" class="ml-auto" hx-get="/api/space" hx-trigger="load"></span>
 
+        {% if current_user is defined and current_user %}
+        <div class="flex items-center gap-2 text-sm text-foreground/80" data-testid="auth-user-indicator">
+            {% if current_account is defined and current_account %}
+            <span class="font-semibold">{{ current_account.display_name }}</span>
+            <span class="text-foreground/40" aria-hidden="true">&middot;</span>
+            {% endif %}
+            <span>{{ current_user.email }}</span>
+        </div>
+        <form method="post" action="/logout" class="m-0">
+            <button type="submit" class="uk-btn uk-btn-ghost uk-btn-sm">{{ _("nav.logout") }}</button>
+        </form>
+        {% else %}
+        <div class="flex items-center gap-2">
+            <a href="/login" class="uk-btn uk-btn-ghost uk-btn-sm no-underline">{{ _("nav.login") }}</a>
+            <a href="/signup" class="uk-btn uk-btn-primary uk-btn-sm no-underline">{{ _("nav.signup") }}</a>
+        </div>
+        {% endif %}
+
         <!-- Language dropdown (Franken UI dropdown with mode: click) -->
         <div class="uk-inline ml-2">
             <button class="uk-btn uk-btn-ghost uk-btn-sm" type="button">

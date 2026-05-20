@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ _("auth.verify.title") }} — {{ _("nav.video_bank") }}{% endblock %}
+{% block content %}
+<section class="max-w-xl mx-auto">
+    <h1 class="text-2xl font-semibold mb-4">{{ _("auth.verify.title") }}</h1>
+
+    {% if status == "sent" %}
+    <div class="uk-alert uk-alert-primary" role="status">
+        <p>{{ _("auth.verify.sent") }}</p>
+        <p>{{ email }}</p>
+    </div>
+    {% elif status == "success" %}
+    <div class="uk-alert uk-alert-success" role="status">
+        <p>{{ _("auth.verify.success") }}</p>
+    </div>
+    <p><a class="uk-btn uk-btn-primary" href="/login">{{ _("auth.login.link") }}</a></p>
+    {% else %}
+    <div class="uk-alert uk-alert-danger" role="alert">
+        <p>{{ _("auth.verify.failure") }}</p>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}
