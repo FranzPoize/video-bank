@@ -19,7 +19,7 @@ class TestTagCreation:
             data={"name": "Tagged Video", "tags": "tutorial, funny, demo"},
             files={"file": ("tagged.mp4", b"content", "video/mp4")},
         )
-        list_resp = await client.get("/")
+        list_resp = await client.get("/videos")
         assert "tutorial" in list_resp.text
         assert "funny" in list_resp.text
         assert "demo" in list_resp.text
@@ -53,7 +53,7 @@ class TestTagCreation:
             files={"file": ("dup.mp4", b"content", "video/mp4")},
         )
         # Check that only one tag was created
-        list_resp = await client.get("/")
+        list_resp = await client.get("/videos")
         # "test" should appear (lowercased), count the occurrences
         assert list_resp.text.count("test") >= 1  # at least once
 
@@ -69,7 +69,7 @@ class TestTagDisplay:
             data={"name": "Tag Display", "tags": "alpha, beta"},
             files={"file": ("display.mp4", b"c", "video/mp4")},
         )
-        response = await client.get("/")
+        response = await client.get("/videos")
         assert "alpha" in response.text
         assert "beta" in response.text
 
