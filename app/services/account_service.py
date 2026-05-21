@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import aiosqlite
 
+from app.services import permission_service
+
 
 ADMIN_CAPABILITIES = {
     "manage_videos": 1,
@@ -42,6 +44,30 @@ async def get_account(db: aiosqlite.Connection, account_id: int) -> dict | None:
     cursor = await db.execute("SELECT * FROM accounts WHERE id = ?", (account_id,))
     row = await cursor.fetchone()
     return dict(row) if row else None
+
+
+async def update_account_display_name(
+    db: aiosqlite.Connection,
+    account_id: int,
+    display_name: str,
+) -> dict | None:
+    """Update an account display name and return the account, or None."""
+    clean_display_name = (display_name or "").strip()
+    if not clean_display_name:
+        raise ValueError("Account name cannot be empty")
+
+    cursor = await db.execute(
+        """
+        UPDATE accounts
+        SET display_name = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        """,
+        (clean_display_name, account_id),
+    )
+    await db.commit()
+    if cursor.rowcount == 0:
+        return None
+    return await get_account(db, account_id)
 
 
 async def create_first_admin_membership(
@@ -173,6 +199,36 @@ async def list_accounts_for_user(db: aiosqlite.Connection, user_id: int) -> list
     return await list_active_accounts_for_user(db, user_id)
 
 
+async def list_memberships_for_user(db: aiosqlite.Connection, user_id: int) -> list[dict]:
+    """Return active account memberships for account switcher/settings UI."""
+    cursor = await db.execute(
+        """
+        SELECT
+            am.*,
+            a.display_name AS account_display_name
+        FROM account_memberships am
+        JOIN accounts a ON a.id = am.account_id
+        WHERE am.user_id = ?
+          AND am.is_active = 1
+          AND am.revoked_at IS NULL
+        ORDER BY a.display_name COLLATE NOCASE ASC, a.id ASC
+        """,
+        (user_id,),
+    )
+    rows = await cursor.fetchall()
+    return [_membership_summary(row) for row in rows]
+
+
+async def can_switch_to_account(db: aiosqlite.Connection, user_id: int, account_id: int) -> bool:
+    """Return whether a user has an active membership in the target account."""
+    return await get_membership(db, user_id, account_id) is not None
+
+
+async def list_account_members(db: aiosqlite.Connection, account_id: int) -> list[dict]:
+    """Alias for active account member summaries used by route code."""
+    return await list_members_for_account(db, account_id)
+
+
 async def get_membership(
     db: aiosqlite.Connection,
     user_id: int,
@@ -236,6 +292,54 @@ async def get_membership_by_id(
     return dict(row) if row else None
 
 
+async def list_members_for_account(db: aiosqlite.Connection, account_id: int) -> list[dict]:
+    """Return active member summaries and capabilities for an account."""
+    cursor = await db.execute(
+        """
+        SELECT
+            am.*,
+            u.email,
+            u.normalized_email,
+            u.is_email_verified
+        FROM account_memberships am
+        JOIN users u ON u.id = am.user_id
+        WHERE am.account_id = ?
+          AND am.is_active = 1
+          AND am.revoked_at IS NULL
+        ORDER BY u.email COLLATE NOCASE ASC, am.id ASC
+        """,
+        (account_id,),
+    )
+    rows = await cursor.fetchall()
+    return [_member_summary(row) for row in rows]
+
+
+async def get_member_summary(
+    db: aiosqlite.Connection,
+    user_id: int,
+    account_id: int,
+) -> dict | None:
+    """Return an active member summary for a user/account pair, or None."""
+    cursor = await db.execute(
+        """
+        SELECT
+            am.*,
+            u.email,
+            u.normalized_email,
+            u.is_email_verified
+        FROM account_memberships am
+        JOIN users u ON u.id = am.user_id
+        WHERE am.user_id = ?
+          AND am.account_id = ?
+          AND am.is_active = 1
+          AND am.revoked_at IS NULL
+        """,
+        (user_id, account_id),
+    )
+    row = await cursor.fetchone()
+    return _member_summary(row) if row else None
+
+
 async def set_session_active_account(
     db: aiosqlite.Connection,
     session_id: int,
@@ -263,6 +367,15 @@ async def set_session_active_account(
     return cursor.rowcount > 0
 
 
+async def switch_session_active_account(
+    db: aiosqlite.Connection,
+    session_id: int,
+    account_id: int,
+) -> bool:
+    """Validate and set the active account for an existing session."""
+    return await set_session_active_account(db, session_id, account_id)
+
+
 async def get_session_active_account_id(
     db: aiosqlite.Connection,
     session_id: int,
@@ -278,3 +391,29 @@ async def _get_session(db: aiosqlite.Connection, session_id: int) -> dict | None
     cursor = await db.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
     row = await cursor.fetchone()
     return dict(row) if row else None
+
+
+def _capabilities_from_row(row) -> dict[str, bool]:
+    return permission_service.capabilities_from_membership(row)
+
+
+def _membership_summary(row) -> dict:
+    membership = dict(row)
+    membership["capabilities"] = _capabilities_from_row(row)
+    return membership
+
+
+def _member_summary(row) -> dict:
+    return {
+        "membership_id": row["id"],
+        "user_id": row["user_id"],
+        "account_id": row["account_id"],
+        "email": row["email"],
+        "normalized_email": row["normalized_email"],
+        "is_email_verified": row["is_email_verified"],
+        "is_active": row["is_active"],
+        "revoked_at": row["revoked_at"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+        "capabilities": _capabilities_from_row(row),
+    }

@@ -23,6 +23,7 @@ LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 # ───────────────────────────────────────────────────────────────────
 
 from app.database import init_db
+from app.routes.accounts import router as accounts_router
 from app.routes.auth import router as auth_router
 from app.routes.videos import router as videos_router
 from app.routes.tags import router as tags_router
@@ -54,6 +55,7 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 # Include routers
 app.include_router(auth_router)
+app.include_router(accounts_router)
 app.include_router(videos_router)
 app.include_router(tags_router)
 app.include_router(matches_router)

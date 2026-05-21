@@ -48,6 +48,7 @@
         {% endif %}
 
         {% if current_user is defined and current_user %}
+        {% include "_account_switcher.html" %}
         <span id="space-indicator" class="ml-auto" hx-get="/api/space" hx-trigger="load"></span>
         <div class="flex items-center gap-2 text-sm text-foreground/80" data-testid="auth-user-indicator">
             {% if current_account is defined and current_account %}

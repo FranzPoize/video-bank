@@ -99,6 +99,13 @@ def _normalize_capability_overrides(capabilities: Mapping[str, Any] | None = Non
     return normalized
 
 
+def capabilities_from_membership(membership: Mapping[str, Any]) -> dict[str, bool]:
+    """Return effective capability booleans for a membership row."""
+    if bool(membership[CAPABILITY_ADMIN]):
+        return {capability: True for capability in ALL_CAPABILITIES}
+    return {capability: bool(membership[capability]) for capability in ALL_CAPABILITIES}
+
+
 async def get_active_membership(db, user_id: int, account_id: int):
     """Return the active membership row for a user/account pair, or ``None``."""
     cursor = await db.execute(
@@ -156,6 +163,19 @@ async def has_capability(db, user_id: int, account_id: int, capability: str) -> 
     if bool(membership[CAPABILITY_ADMIN]):
         return True
     return bool(membership[capability])
+
+
+async def get_current_capabilities(db, user_id: int, account_id: int) -> dict[str, bool] | None:
+    """Return effective capabilities for an active account member, or None."""
+    membership = await get_active_membership(db, user_id, account_id)
+    if membership is None:
+        return None
+    return capabilities_from_membership(membership)
+
+
+async def can_manage_account_settings(db, user_id: int, account_id: int) -> bool:
+    """Return whether the user can edit account settings for the account."""
+    return await has_capability(db, user_id, account_id, CAPABILITY_MANAGE_ACCOUNT_SETTINGS)
 
 
 async def require_capability(db, user_id: int, account_id: int, capability: str):

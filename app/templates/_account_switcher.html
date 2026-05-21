@@ -1,0 +1,12 @@
+{% if current_user_accounts is defined and current_user_accounts|length > 1 %}
+<form method="post" action="/accounts/switch" class="flex items-center gap-2 m-0" data-testid="account-switcher">
+    <label for="account-switcher-select" class="sr-only">{{ _("account.switcher.label") }}</label>
+    <select id="account-switcher-select" name="account_id" class="uk-select uk-form-sm min-w-40">
+        {% for account in current_user_accounts %}
+        <option value="{{ account.id }}" {% if current_account is defined and current_account and account.id == current_account.id %}selected{% endif %}>{{ account.display_name }}</option>
+        {% endfor %}
+    </select>
+    <input type="hidden" name="next" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+    <button type="submit" class="uk-btn uk-btn-secondary uk-btn-sm">{{ _("account.switcher.submit") }}</button>
+</form>
+{% endif %}

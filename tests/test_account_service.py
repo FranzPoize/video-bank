@@ -155,3 +155,89 @@ async def test_set_and_get_active_account_for_session_requires_membership(db):
 async def test_create_account_rejects_empty_display_name(db):
     with pytest.raises(ValueError, match="Account name cannot be empty"):
         await account_service.create_account(db, "   ")
+
+
+@pytest.mark.asyncio
+async def test_list_memberships_for_user_supports_multiple_account_switcher(db):
+    user_id = await _create_user(db)
+    alpha = await account_service.create_account_with_admin_membership(db, user_id, "Alpha")
+    beta = await account_service.create_account_with_admin_membership(db, user_id, "beta")
+
+    memberships = await account_service.list_memberships_for_user(db, user_id)
+
+    assert [membership["account_id"] for membership in memberships] == [alpha["account"]["id"], beta["account"]["id"]]
+    assert [membership["account_display_name"] for membership in memberships] == ["Alpha", "beta"]
+    assert all(membership["is_active"] == 1 for membership in memberships)
+
+
+@pytest.mark.asyncio
+async def test_switch_session_active_account_rejects_forged_target(db):
+    user_id = await _create_user(db)
+    other_user_id = await _create_user(db, "switch-forged@example.com")
+    owned = await account_service.create_account_with_admin_membership(db, user_id, "Owned")
+    forged = await account_service.create_account_with_admin_membership(db, other_user_id, "Forged")
+    session_id = await _create_session(db, user_id)
+
+    assert await account_service.switch_session_active_account(db, session_id, owned["account"]["id"]) is True
+
+    with pytest.raises(ValueError, match="active membership"):
+        await account_service.switch_session_active_account(db, session_id, forged["account"]["id"])
+
+    assert await account_service.get_session_active_account_id(db, session_id) == owned["account"]["id"]
+
+
+@pytest.mark.asyncio
+async def test_switch_session_active_account_rejects_revoked_membership(db):
+    user_id = await _create_user(db)
+    revoked = await account_service.create_account_with_admin_membership(db, user_id, "Revoked")
+    session_id = await _create_session(db, user_id)
+    await db.execute(
+        "UPDATE account_memberships SET is_active = 0, revoked_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (revoked["membership"]["id"],),
+    )
+    await db.commit()
+
+    with pytest.raises(ValueError, match="active membership"):
+        await account_service.switch_session_active_account(db, session_id, revoked["account"]["id"])
+
+
+@pytest.mark.asyncio
+async def test_update_account_display_name_trims_and_returns_account(db):
+    user_id = await _create_user(db)
+    created = await account_service.create_account_with_admin_membership(db, user_id, "Original")
+
+    account = await account_service.update_account_display_name(db, created["account"]["id"], "  Renamed Team  ")
+
+    assert account is not None
+    assert account["display_name"] == "Renamed Team"
+
+
+@pytest.mark.asyncio
+async def test_list_members_for_account_returns_member_summary_and_capabilities(db):
+    admin_id = await _create_user(db, "admin-members@example.com")
+    member_id = await _create_user(db, "member@example.com")
+    created = await account_service.create_account_with_admin_membership(db, admin_id, "Members")
+    await db.execute(
+        """
+        INSERT INTO account_memberships (
+            user_id, account_id, manage_videos, manage_matches, manage_tags,
+            manage_account_settings, manage_members, admin, is_active
+        ) VALUES (?, ?, 1, 0, 1, 0, 0, 0, 1)
+        """,
+        (member_id, created["account"]["id"]),
+    )
+    await db.commit()
+
+    members = await account_service.list_members_for_account(db, created["account"]["id"])
+
+    assert [member["email"] for member in members] == ["admin-members@example.com", "member@example.com"]
+    member_summary = members[1]
+    assert member_summary["membership_id"] is not None
+    assert member_summary["capabilities"] == {
+        "manage_videos": True,
+        "manage_matches": False,
+        "manage_tags": True,
+        "manage_account_settings": False,
+        "manage_members": False,
+        "admin": False,
+    }

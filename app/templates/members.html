@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}{{ _("account.members.title") }} — {{ _("nav.video_bank") }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-6">
+    <div class="flex items-center justify-between gap-4">
+        <div>
+            <h1 class="uk-h2 mb-2">{{ _("account.members.title") }}</h1>
+            <p class="text-muted-foreground">{{ current_account.display_name }}</p>
+        </div>
+        <a href="/account/settings" class="uk-btn uk-btn-ghost no-underline">{{ _("account.settings.title") }}</a>
+    </div>
+
+    {% if can_manage_members %}
+    <div class="uk-alert" data-testid="member-management-controls">
+        <p>{{ _("account.members.manage_hint") }}</p>
+    </div>
+    {% endif %}
+
+    <div class="uk-card uk-card-body">
+        <div class="overflow-x-auto">
+            <table class="uk-table uk-table-divider uk-table-middle">
+                <thead>
+                    <tr>
+                        <th>{{ _("account.members.email") }}</th>
+                        <th>{{ _("account.members.capabilities") }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for member in members %}
+                    <tr>
+                        <td>{{ member.email }}</td>
+                        <td>
+                            <div class="flex flex-wrap gap-2">
+                                {% if member.capabilities.admin %}<span class="uk-label">{{ _("capability.admin") }}</span>{% endif %}
+                                {% if member.capabilities.manage_account_settings %}<span class="uk-label">{{ _("capability.manage_account_settings") }}</span>{% endif %}
+                                {% if member.capabilities.manage_members %}<span class="uk-label">{{ _("capability.manage_members") }}</span>{% endif %}
+                                {% if member.capabilities.manage_videos %}<span class="uk-label">{{ _("capability.manage_videos") }}</span>{% endif %}
+                                {% if member.capabilities.manage_matches %}<span class="uk-label">{{ _("capability.manage_matches") }}</span>{% endif %}
+                                {% if member.capabilities.manage_tags %}<span class="uk-label">{{ _("capability.manage_tags") }}</span>{% endif %}
+                                {% if not member.capabilities.admin and not member.capabilities.manage_account_settings and not member.capabilities.manage_members and not member.capabilities.manage_videos and not member.capabilities.manage_matches and not member.capabilities.manage_tags %}
+                                <span class="text-muted-foreground">{{ _("capability.viewer") }}</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

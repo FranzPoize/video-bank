@@ -154,6 +154,39 @@ class TestCapabilityChecks:
                 db, user_id, account_id, permission_service.CAPABILITY_MANAGE_MEMBERS
             )
 
+    async def test_get_current_capabilities_expands_admin_to_all_capabilities(self, db):
+        user_id = await _create_user(db, "admin-capabilities@example.com")
+        account_id = await _create_account(db)
+        await _create_membership(db, user_id, account_id, admin=True)
+
+        capabilities = await permission_service.get_current_capabilities(db, user_id, account_id)
+
+        assert capabilities == {capability: True for capability in permission_service.ALL_CAPABILITIES}
+
+    async def test_get_current_capabilities_returns_none_for_non_member(self, db):
+        user_id = await _create_user(db, "missing-capabilities@example.com")
+        account_id = await _create_account(db)
+
+        assert await permission_service.get_current_capabilities(db, user_id, account_id) is None
+
+    async def test_can_manage_account_settings_helper_allows_capability_or_admin(self, db):
+        settings_user_id = await _create_user(db, "settings-helper@example.com")
+        admin_user_id = await _create_user(db, "settings-admin-helper@example.com")
+        viewer_user_id = await _create_user(db, "settings-viewer@example.com")
+        account_id = await _create_account(db)
+        await _create_membership(
+            db,
+            settings_user_id,
+            account_id,
+            manage_account_settings=True,
+        )
+        await _create_membership(db, admin_user_id, account_id, admin=True)
+        await _create_membership(db, viewer_user_id, account_id)
+
+        assert await permission_service.can_manage_account_settings(db, settings_user_id, account_id) is True
+        assert await permission_service.can_manage_account_settings(db, admin_user_id, account_id) is True
+        assert await permission_service.can_manage_account_settings(db, viewer_user_id, account_id) is False
+
 
 class TestLastAdminProtection:
     async def test_cannot_remove_only_administrator(self, db):

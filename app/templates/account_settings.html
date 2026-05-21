@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}{{ _("account.settings.title") }} — {{ _("nav.video_bank") }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+    <div class="flex items-center justify-between gap-4">
+        <div>
+            <h1 class="uk-h2 mb-2">{{ _("account.settings.title") }}</h1>
+            <p class="text-muted-foreground">{{ _("account.settings.intro") }}</p>
+        </div>
+        <a href="/account/members" class="uk-btn uk-btn-ghost no-underline">{{ _("account.members.title") }}</a>
+    </div>
+
+    {% if error == "empty" %}
+    <div class="uk-alert uk-alert-destructive" data-uk-alert>
+        <p>{{ _("account.settings.error.empty") }}</p>
+    </div>
+    {% endif %}
+
+    <div class="uk-card uk-card-body">
+        <h2 class="uk-card-title mb-4">{{ _("account.settings.metadata") }}</h2>
+        {% if can_manage_account_settings %}
+        <form method="post" action="/account/settings" class="space-y-4">
+            <div>
+                <label for="display_name" class="uk-form-label">{{ _("account.display_name") }}</label>
+                <input id="display_name" name="display_name" class="uk-input" value="{{ current_account.display_name }}" required>
+            </div>
+            <button type="submit" class="uk-btn uk-btn-primary">{{ _("account.settings.save") }}</button>
+        </form>
+        {% else %}
+        <dl class="space-y-2">
+            <div>
+                <dt class="font-semibold">{{ _("account.display_name") }}</dt>
+                <dd>{{ current_account.display_name }}</dd>
+            </div>
+        </dl>
+        <p class="mt-4 text-muted-foreground">{{ _("account.settings.read_only") }}</p>
+        {% endif %}
+    </div>
+
+    <div class="uk-card uk-card-body">
+        <h2 class="uk-card-title mb-4">{{ _("account.switcher.accounts") }}</h2>
+        <ul class="uk-list uk-list-divider">
+            {% for account in current_user_accounts %}
+            <li class="py-2">
+                <span class="font-medium">{{ account.display_name }}</span>
+                {% if account.id == current_account.id %}
+                <span class="uk-label ml-2">{{ _("account.current") }}</span>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="uk-card uk-card-body">
+        <h2 class="uk-card-title mb-4">{{ _("account.members.summary") }}</h2>
+        {% if members is not none %}
+        <p>{{ members|length }} {{ _("account.members.count_suffix") }}</p>
+        <a href="/account/members" class="uk-btn uk-btn-secondary no-underline">{{ _("account.members.view") }}</a>
+        {% else %}
+        <p>{{ _("account.members.summary_hint") }}</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
