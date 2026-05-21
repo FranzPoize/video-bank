@@ -109,6 +109,7 @@ class TestAccountSettingsRoutes:
         assert "Read Only Team" in response.text
         assert 'name="display_name"' not in response.text
         assert "You can view this account, but you cannot edit account settings." in response.text
+        assert "Contact an account admin if these details need to change." in response.text
 
 
 class TestAccountMembersRoutes:
@@ -146,6 +147,7 @@ class TestAccountMembersRoutes:
         hidden = await client.get("/account/members")
         assert hidden.status_code == 200
         assert "readonly@example.com" in hidden.text
+        assert "Members shown here can access this account according to their listed capabilities." in hidden.text
         assert 'data-testid="member-management-controls"' not in hidden.text
 
         client.cookies.clear()
@@ -164,3 +166,12 @@ class TestAccountMembersRoutes:
         assert "readonly@example.com" in shown.text
         assert "admin@example.com" in shown.text
         assert 'data-testid="member-management-controls"' in shown.text
+
+    @pytest.mark.asyncio
+    async def test_empty_invitation_state_is_translated(self, client, db, auth_context):
+        """Invitation management page explains the empty pending invitation state."""
+        response = await client.get("/account/invitations/new")
+
+        assert response.status_code == 200
+        assert "No pending invitations" in response.text
+        assert "Invite teammates with only the capabilities they need" in response.text

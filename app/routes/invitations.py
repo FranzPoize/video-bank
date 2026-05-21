@@ -50,7 +50,24 @@ async def _account_context(db, active: dict) -> dict:
         "current_user_accounts": accounts,
         "membership": membership,
         "can_manage_members": _has_membership_capability(membership, permission_service.MANAGE_MEMBERS),
+        "can_manage_videos": _has_membership_capability(membership, permission_service.MANAGE_VIDEOS),
     }
+
+
+async def _list_pending_invitations(db, account_id: int) -> list[dict]:
+    """Return pending invitations for account invitation management UI."""
+    cursor = await db.execute(
+        """
+        SELECT id, invited_email, expires_at, manage_videos, manage_matches, manage_tags,
+               manage_account_settings, manage_members, admin
+        FROM invitations
+        WHERE account_id = ? AND accepted_at IS NULL AND revoked_at IS NULL
+        ORDER BY created_at DESC, id DESC
+        """,
+        (account_id,),
+    )
+    rows = await cursor.fetchall()
+    return [dict(row) for row in rows]
 
 
 def _invitation_url(request: Request, token: str) -> str:
@@ -90,6 +107,7 @@ async def new_invitation_form(request: Request, db=Depends(get_db), active=Depen
         raise HTTPException(status_code=403, detail="Capability required")
 
     context = await _account_context(db, active)
+    pending_invitations = await _list_pending_invitations(db, active["account"]["id"])
     return templates.TemplateResponse(
         request,
         "invite_form.html",
@@ -99,8 +117,10 @@ async def new_invitation_form(request: Request, db=Depends(get_db), active=Depen
             "email": "",
             "selected_capabilities": {},
             "sent": request.query_params.get("sent") == "1",
+            "revoked": request.query_params.get("revoked") == "1",
             "error": None,
             "capabilities": permission_service.ALL_CAPABILITIES,
+            "pending_invitations": pending_invitations,
         },
     )
 
@@ -138,6 +158,7 @@ async def create_invitation(
         )
     except ValueError:
         context = await _account_context(db, active)
+        pending_invitations = await _list_pending_invitations(db, active["account"]["id"])
         return templates.TemplateResponse(
             request,
             "invite_form.html",
@@ -147,8 +168,10 @@ async def create_invitation(
                 "email": target_email,
                 "selected_capabilities": selected,
                 "sent": False,
+                "revoked": False,
                 "error": "invalid",
                 "capabilities": permission_service.ALL_CAPABILITIES,
+                "pending_invitations": pending_invitations,
             },
             status_code=400,
         )
@@ -163,6 +186,7 @@ async def create_invitation(
     except RuntimeError:
         logger.exception("Failed to send invitation email for invitation_id=%s", invitation["id"])
         context = await _account_context(db, active)
+        pending_invitations = await _list_pending_invitations(db, active["account"]["id"])
         return templates.TemplateResponse(
             request,
             "invite_form.html",
@@ -172,8 +196,10 @@ async def create_invitation(
                 "email": "",
                 "selected_capabilities": {},
                 "sent": False,
+                "revoked": False,
                 "error": "email_failed",
                 "capabilities": permission_service.ALL_CAPABILITIES,
+                "pending_invitations": pending_invitations,
             },
             status_code=500,
         )

@@ -35,6 +35,8 @@
 {% else %}
 <div class="empty-state">
     <p>{{ _("video.no_videos_yet") }}</p>
+    {% if can_manage_videos %}
     <p class="mt-4"><a href="/upload" class="uk-btn uk-btn-primary">{{ _("video.upload_first") }}</a></p>
+    {% endif %}
 </div>
 {% endif %}

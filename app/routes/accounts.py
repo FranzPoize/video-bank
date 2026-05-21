@@ -41,6 +41,10 @@ async def _account_context(db, active: dict) -> dict:
             membership,
             permission_service.MANAGE_MEMBERS,
         ),
+        "can_manage_videos": _has_membership_capability(
+            membership,
+            permission_service.MANAGE_VIDEOS,
+        ),
     }
 
 

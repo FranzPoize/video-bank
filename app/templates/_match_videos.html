@@ -17,13 +17,13 @@
                 </div>
                 {% endif %}
             </div>
-            <button class="uk-btn uk-btn-destructive uk-btn-xs flex-shrink-0"
+            {% if can_manage_matches %}<button class="uk-btn uk-btn-destructive uk-btn-xs flex-shrink-0"
                     hx-post="/api/matches/{{ match.id }}/videos/{{ video.id }}/remove"
                     hx-target="#match-videos-section"
                     hx-swap="outerHTML"
                     onclick="event.stopPropagation();">
                 {{ _("match.remove_video") }}
-            </button>
+            </button>{% endif %}
         </div>
         {% endfor %}
     </div>
@@ -31,7 +31,7 @@
     <p class="text-muted-foreground text-sm">{{ _("match.no_videos") }}</p>
     {% endif %}
 
-    {% if unlinked_videos and unlinked_videos|length > 0 %}
+    {% if can_manage_matches and unlinked_videos and unlinked_videos|length > 0 %}
     <div class="mt-4 pt-3 border-t border-border">
         <form class="flex gap-2"
               hx-post="/api/matches/{{ match.id }}/videos"

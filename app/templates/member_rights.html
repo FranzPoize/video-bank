@@ -17,6 +17,7 @@
 
     <form method="post" action="/account/members/{{ target_member.membership_id }}/rights" class="uk-card uk-card-body space-y-4" data-testid="member-rights-form">
         <p class="text-muted-foreground">{{ _("account.members.rights_intro") }}</p>
+        <p class="text-muted-foreground">{{ _("account.members.rights_help") }}</p>
 
         {% for capability in ["admin", "manage_account_settings", "manage_members", "manage_videos", "manage_matches", "manage_tags"] %}
         <label class="flex items-center gap-3">

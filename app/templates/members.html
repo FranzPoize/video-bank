@@ -7,8 +7,12 @@
         <div>
             <h1 class="uk-h2 mb-2">{{ _("account.members.title") }}</h1>
             <p class="text-muted-foreground">{{ current_account.display_name }}</p>
+            <p class="text-muted-foreground mt-1">{{ _("account.members.intro") }}</p>
         </div>
-        <a href="/account/settings" class="uk-btn uk-btn-ghost no-underline">{{ _("account.settings.title") }}</a>
+        <div class="flex gap-2">
+            {% if can_manage_members %}<a href="/account/invitations/new" class="uk-btn uk-btn-primary no-underline" data-testid="invite-member-link">{{ _("invitation.new.title") }}</a>{% endif %}
+            <a href="/account/settings" class="uk-btn uk-btn-ghost no-underline">{{ _("account.settings.title") }}</a>
+        </div>
     </div>
 
     {% if can_manage_members %}
@@ -18,6 +22,7 @@
     {% endif %}
 
     <div class="uk-card uk-card-body">
+        <p class="text-muted-foreground mb-4">{{ _("account.members.read_hint") }}</p>
         <div class="overflow-x-auto">
             <table class="uk-table uk-table-divider uk-table-middle">
                 <thead>
@@ -31,6 +36,11 @@
                     {% if error %}
                     <tr>
                         <td colspan="3"><div class="uk-alert uk-alert-danger">{{ error }}</div></td>
+                    </tr>
+                    {% endif %}
+                    {% if members|length == 0 %}
+                    <tr>
+                        <td colspan="3" class="text-center text-muted-foreground py-8">{{ _("account.members.empty") }}</td>
                     </tr>
                     {% endif %}
                     {% for member in members %}

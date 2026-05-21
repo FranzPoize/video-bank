@@ -8,16 +8,19 @@
     {% if status == "accepted" %}
     <div class="uk-alert uk-alert-success" data-uk-alert>
         <p>{{ _("invitation.result.accepted_prefix") }} {{ invitation.account_display_name }}.</p>
+        <p>{{ _("invitation.result.accepted_help") }}</p>
     </div>
     <a href="/account/settings" class="uk-btn uk-btn-primary no-underline">{{ _("account.settings.title") }}</a>
     {% elif status == "continue_signup" %}
     <div class="uk-card uk-card-body space-y-3">
         <p>{{ _("invitation.result.continue_signup") }}</p>
+        <p class="text-muted-foreground">{{ _("invitation.result.continue_signup_help") }}</p>
         <a href="/signup{% if token %}?invitation_token={{ token | urlencode }}{% endif %}" class="uk-btn uk-btn-primary no-underline">{{ _("auth.signup.link") }}</a>
     </div>
     {% else %}
     <div class="uk-alert uk-alert-destructive" data-uk-alert>
         <p>{{ _("invitation.result.invalid") }}</p>
+        <p>{{ _("invitation.result.invalid_hint") }}</p>
     </div>
     {% endif %}
 </div>

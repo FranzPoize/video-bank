@@ -12,13 +12,13 @@
             {% if match.location %} &middot; {{ match.location }}{% endif %}
         </p>
     </div>
-    <div class="actions">
+    {% if can_manage_matches %}<div class="actions">
         <a href="/matches/{{ match.id }}/edit" class="uk-btn uk-btn-primary uk-btn-sm">{{ _("btn.edit") }}</a>
         <form action="/matches/{{ match.id }}/delete" method="post" style="display: inline;"
               onsubmit="return confirm('{{ _("match.confirm_delete") }}')">
             <button type="submit" class="uk-btn uk-btn-destructive uk-btn-sm">{{ _("btn.delete") }}</button>
         </form>
-    </div>
+    </div>{% endif %}
 </div>
 
 {% if match.notes %}

@@ -45,6 +45,7 @@ class TestSignupRoutes:
 
         assert response.status_code == 200
         assert "Check your email" in response.text
+        assert "Keep this page open until you receive the email" in response.text
         assert sent["recipient"] == "Owner@Example.com"
         assert "/verify-email?token=" in sent["verification_url"]
 
@@ -68,6 +69,7 @@ class TestEmailVerificationRoute:
 
         assert response.status_code == 200
         assert "Your email is verified" in response.text
+        assert "Log in to choose your active account and continue" in response.text
         verified = await auth_service.get_user_by_id(db, user["id"])
         assert verified["is_email_verified"] == 1
 

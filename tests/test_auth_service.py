@@ -130,16 +130,20 @@ async def test_signup_verification_creates_account_and_admin_membership(db):
         account_display_name="Owner Account",
     )
 
-    account = await (await db.execute("SELECT * FROM accounts")).fetchone()
     membership = await (
         await db.execute(
-            "SELECT * FROM account_memberships WHERE user_id = ? AND account_id = ?",
-            (user["id"], account["id"]),
+            """
+            SELECT am.*, a.display_name AS account_display_name
+            FROM account_memberships am
+            JOIN accounts a ON a.id = am.account_id
+            WHERE am.user_id = ?
+            """,
+            (user["id"],),
         )
     ).fetchone()
 
     assert verified["is_email_verified"] == 1
-    assert account["display_name"] == "Owner Account"
+    assert membership["account_display_name"] == "Owner Account"
     assert membership["admin"] == 1
     assert membership["manage_videos"] == 1
     assert membership["manage_matches"] == 1

@@ -40,11 +40,12 @@
 </head>
 <body class="bg-background text-foreground">
     <nav class="border-b bg-background flex items-center gap-4 px-6 py-3">
-        <a href="/" class="text-foreground/80 hover:text-foreground font-semibold no-underline">{{ _("nav.video_bank") }}</a>
+        <a href="/" class="text-foreground/80 hover:text-foreground font-semibold no-underline">{{ _("nav.matches") }}</a>
         {% if current_user is defined and current_user %}
         <a href="/videos" class="text-foreground/80 hover:text-foreground font-semibold no-underline">{{ _("nav.videos") }}</a>
-        <a href="/upload" class="text-foreground/80 hover:text-foreground font-semibold no-underline">{{ _("nav.upload") }}</a>
+        {% if can_manage_videos is defined and can_manage_videos %}<a href="/upload" class="text-foreground/80 hover:text-foreground font-semibold no-underline">{{ _("nav.upload") }}</a>{% endif %}
         <a href="/settings" class="text-foreground/80 hover:text-foreground font-semibold no-underline">{{ _("nav.settings") }}</a>
+        <a href="/account/settings" class="text-foreground/80 hover:text-foreground font-semibold no-underline">{{ _("nav.account") }}</a>
         {% endif %}
 
         {% if current_user is defined and current_user %}

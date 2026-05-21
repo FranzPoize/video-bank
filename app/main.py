@@ -98,7 +98,11 @@ async def language_middleware(request: Request, call_next):
 async def http_exception_handler(request: Request, exc):
     """Return a styled error page for HTTP errors."""
     if exc.status_code in {302, 303, 307, 308} and getattr(exc, "headers", None) and exc.headers.get("Location"):
-        return RedirectResponse(url=exc.headers["Location"], status_code=exc.status_code)
+        response = RedirectResponse(url=exc.headers["Location"], status_code=exc.status_code)
+        for header_name, header_value in exc.headers.items():
+            if header_name.lower() != "location":
+                response.headers[header_name] = header_value
+        return response
 
     # Get i18n context from request.state (set by middleware)
     i18n = getattr(request.state, "i18n", get_i18n_context(DEFAULT_LANG))

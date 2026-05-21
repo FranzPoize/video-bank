@@ -7,11 +7,13 @@
     {% if status == "sent" %}
     <div class="uk-alert uk-alert-primary" role="status">
         <p>{{ _("auth.verify.sent") }}</p>
+        <p>{{ _("auth.verify.sent_help") }}</p>
         <p>{{ email }}</p>
     </div>
     {% elif status == "success" %}
     <div class="uk-alert uk-alert-success" role="status">
         <p>{{ _("auth.verify.success") }}</p>
+        <p>{{ _("auth.verify.success_help") }}</p>
         {% if invitation_token %}<p>{{ _("invitation.verify.activated") }}</p>{% endif %}
     </div>
     <p><a class="uk-btn uk-btn-primary" href="/login">{{ _("auth.login.link") }}</a></p>

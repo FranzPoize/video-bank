@@ -17,6 +17,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from tests.conftest import create_test_video, login_test_user
+
 DiskUsage = collections.namedtuple("DiskUsage", ["total", "used", "free"])
 
 
@@ -60,6 +62,7 @@ class TestFileServiceLogging:
     @pytest.mark.asyncio
     async def test_save_upload_logs_info(self, client, db, caplog):
         """Uploading a file produces an INFO log."""
+        await login_test_user(client, db, email="log-upload@example.com")
         caplog.set_level("INFO")
 
         response = await client.post(
@@ -163,8 +166,9 @@ class TestVideoServiceLogging:
     """Tests for log messages in video_service.py."""
 
     @pytest.mark.asyncio
-    async def test_upload_rejected_logs_warning(self, client, caplog):
+    async def test_upload_rejected_logs_warning(self, client, db, caplog):
         """Upload rejection (bad format) logs WARNING."""
+        await login_test_user(client, db, email="bad-format-log@example.com")
         caplog.set_level("WARNING")
 
         response = await client.post(
@@ -179,18 +183,15 @@ class TestVideoServiceLogging:
         assert warning_logs[0].levelname == "WARNING"
 
     @pytest.mark.asyncio
-    async def test_delete_video_logs_info(self, client, caplog):
+    async def test_delete_video_logs_info(self, client, db, caplog):
         """Deleting a video logs INFO."""
+        await login_test_user(client, db, email="delete-log@example.com")
         caplog.set_level("INFO")
 
         # Upload first
-        await client.post(
-            "/api/videos",
-            data={"name": "To Delete", "tags": ""},
-            files={"file": ("todel.mp4", b"c", "video/mp4")},
-        )
+        video_id = await create_test_video(client, "To Delete")
 
-        response = await client.post("/videos/1/delete")
+        response = await client.post(f"/videos/{video_id}/delete")
         assert response.status_code == 303
 
         delete_logs = [r for r in caplog.records if "Video deleted" in r.getMessage()]
@@ -206,14 +207,11 @@ class TestClipServiceLogging:
         """Successful clip creation logs INFO."""
         from app.services.clip_service import create_clip
 
+        context = await login_test_user(client, db, email="clip-log@example.com")
         caplog.set_level("INFO")
 
         # Upload source video
-        await client.post(
-            "/api/videos",
-            data={"name": "Source Vid", "tags": ""},
-            files={"file": ("src.mp4", b"fake-content", "video/mp4")},
-        )
+        video_id = await create_test_video(client, "src")
 
         with patch("app.services.clip_service.shutil.which") as mock_which, \
              patch("app.services.clip_service.asyncio.create_subprocess_exec") as mock_subproc:
@@ -252,7 +250,7 @@ class TestClipServiceLogging:
 
                 mock_path.side_effect = path_side_effect
 
-                clip = await create_clip(db, 1, 10.0, 20.0)
+                clip = await create_clip(db, video_id, 10.0, 20.0, account_id=context["account"]["id"])
 
         assert clip is not None
         clip_logs = [r for r in caplog.records if "Clip created" in r.getMessage()]
@@ -264,13 +262,10 @@ class TestClipServiceLogging:
         """ffmpeg failure during clip creation logs ERROR."""
         from app.services.clip_service import create_clip
 
+        context = await login_test_user(client, db, email="clip-failure-log@example.com")
         caplog.set_level("ERROR")
 
-        await client.post(
-            "/api/videos",
-            data={"name": "Failing Source", "tags": ""},
-            files={"file": ("fail.mp4", b"c", "video/mp4")},
-        )
+        video_id = await create_test_video(client, "fail")
 
         with patch("app.services.clip_service.shutil.which") as mock_which, \
              patch("app.services.clip_service.asyncio.create_subprocess_exec") as mock_subproc:
@@ -307,7 +302,7 @@ class TestClipServiceLogging:
                 mock_path.side_effect = path_side_effect
 
                 with pytest.raises(RuntimeError, match="ffmpeg failed"):
-                    await create_clip(db, 1, 0.0, 10.0)
+                    await create_clip(db, video_id, 0.0, 10.0, account_id=context["account"]["id"])
 
         error_logs = [r for r in caplog.records if "ffmpeg failed for clip" in r.getMessage()]
         assert len(error_logs) >= 1

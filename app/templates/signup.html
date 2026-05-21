@@ -12,7 +12,10 @@
     <form method="post" action="/signup" class="space-y-4">
         {% if invitation_token %}
         <input type="hidden" name="invitation_token" value="{{ invitation_token }}">
-        <div class="uk-alert uk-alert-primary" role="status">{{ _("invitation.signup.context") }}</div>
+        <div class="uk-alert uk-alert-primary" role="status">
+            <p>{{ _("invitation.signup.context") }}</p>
+            <p>{{ _("invitation.signup.auto_activate_hint") }}</p>
+        </div>
         {% endif %}
         <div>
             <label class="uk-form-label" for="signup-email">{{ _("auth.email") }}</label>

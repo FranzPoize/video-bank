@@ -35,6 +35,11 @@ async def test_admin_can_create_invitation(client, db, auth_context, monkeypatch
     assert sent["recipient"] == "invitee@example.com"
     assert "/invitations/accept?token=" in sent["invitation_url"]
 
+    followup = await client.get(response.headers["location"])
+    assert followup.status_code == 200
+    assert "The invitation email includes a secure acceptance link" in followup.text
+    assert "invitee@example.com" in followup.text
+
 
 @pytest.mark.asyncio
 async def test_new_user_accepts_after_signup_and_email_verification(client, db, monkeypatch):
@@ -60,10 +65,12 @@ async def test_new_user_accepts_after_signup_and_email_verification(client, db, 
     accept_page = await client.get(f"/invitations/accept?token={invitation['token']}")
     assert accept_page.status_code == 200
     assert "Team Videos" in accept_page.text
+    assert "Use the invited email address when you continue" in accept_page.text
 
     signup_page = await client.get(f"/signup?invitation_token={invitation['token']}")
     assert signup_page.status_code == 200
     assert 'name="invitation_token"' in signup_page.text
+    assert "After verification, your membership will be activated automatically" in signup_page.text
 
     signup = await client.post(
         "/signup",
@@ -204,6 +211,7 @@ async def test_expired_revoked_and_used_invitations_show_safe_errors(client, db)
         response = await client.get(f"/invitations/accept?token={token}")
         assert response.status_code == 200
         assert "This invitation link is invalid or no longer available" in response.text
+        assert "Ask the account admin to send a new invitation" in response.text
 
 
 @pytest.mark.asyncio

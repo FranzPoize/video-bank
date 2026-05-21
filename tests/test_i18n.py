@@ -24,35 +24,35 @@ class TestLanguageDetection:
     @pytest.mark.asyncio
     async def test_default_language_english(self, client):
         """No language cookie -> English text in response."""
-        response = await client.get("/")
-        assert "Video Bank" in response.text  # nav.video_bank in English
-        assert "Upload" in response.text       # nav.upload in English
+        response = await client.get("/login")
+        assert "Matches" in response.text  # nav.matches in English
+        assert "Sign up" in response.text  # nav.signup in English
 
     @pytest.mark.asyncio
     async def test_language_cookie_french(self, client):
         """Cookie: lang=fr -> French text in response."""
-        response = await client.get("/", cookies={"lang": "fr"})
-        assert "Banque de vidéos" in response.text   # nav.video_bank in French
-        assert "Téléverser" in response.text          # nav.upload in French
+        response = await client.get("/login", cookies={"lang": "fr"})
+        assert "Matchs" in response.text  # nav.matches in French
+        assert "Créer un compte" in response.text  # nav.signup in French
 
     @pytest.mark.asyncio
     async def test_accept_language_header(self, client):
         """Accept-Language: fr -> French text in response."""
         response = await client.get(
-            "/",
+            "/login",
             headers={"accept-language": "fr-FR,fr;q=0.9"},
         )
-        assert "Téléverser" in response.text
+        assert "Créer un compte" in response.text
         assert "Banque de vidéos" in response.text
 
     @pytest.mark.asyncio
     async def test_invalid_language_fallback(self, client):
         """Invalid lang cookie -> English (default fallback)."""
-        response = await client.get("/", cookies={"lang": "invalid"})
+        response = await client.get("/login", cookies={"lang": "invalid"})
         # get_translations("invalid") returns English base because
         # _load_translation_file("invalid") returns {} and merge = {**en, **{}}
-        assert "Video Bank" in response.text
-        assert "Upload" in response.text
+        assert "Matches" in response.text
+        assert "Sign up" in response.text
 
 
 class TestLanguageSwitch:
@@ -118,7 +118,7 @@ class TestTranslationSystem:
         from app.templates import get_translations
 
         en = get_translations("en")
-        assert en["nav.video_bank"] == "Video Bank"
+        assert en["nav.matches"] == "Matches"
         assert en["nav.upload"] == "Upload"
         assert en["page.videos"] == "Videos"
         assert len(en) >= 20  # Sanity: English has many keys
@@ -129,7 +129,7 @@ class TestTranslationSystem:
         from app.templates import get_translations
 
         fr = get_translations("fr")
-        assert fr["nav.video_bank"] == "Banque de vidéos"
+        assert fr["nav.matches"] == "Matchs"
         assert fr["nav.upload"] == "Téléverser"
         assert fr["nav.settings"] == "Paramètres"
 
@@ -163,4 +163,4 @@ class TestTranslationSystem:
             assert fr[key] is not None
 
         # Spot-check that French overrides are actually taking effect
-        assert fr["nav.video_bank"] == "Banque de vidéos"
+        assert fr["nav.matches"] == "Matchs"

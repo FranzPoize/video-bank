@@ -16,6 +16,11 @@
         <p>{{ _("account.settings.error.empty") }}</p>
     </div>
     {% endif %}
+    {% if request.query_params.get("invitation_accepted") == "1" %}
+    <div class="uk-alert uk-alert-success" data-uk-alert>
+        <p>{{ _("account.settings.invitation_accepted") }}</p>
+    </div>
+    {% endif %}
 
     <div class="uk-card uk-card-body">
         <h2 class="uk-card-title mb-4">{{ _("account.settings.metadata") }}</h2>
@@ -35,6 +40,7 @@
             </div>
         </dl>
         <p class="mt-4 text-muted-foreground">{{ _("account.settings.read_only") }}</p>
+        <p class="mt-2 text-muted-foreground">{{ _("account.settings.read_only_contact_admin") }}</p>
         {% endif %}
     </div>
 

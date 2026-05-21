@@ -4,7 +4,12 @@
 {% block content %}
 <div class="uk-text-center py-16">
     <h1 class="text-5xl text-destructive mb-4">{{ status_code }}</h1>
-    <p class="text-lg text-muted-foreground mb-8">{{ detail }}</p>
-    <a href="/" class="uk-btn uk-btn-primary">{{ _("btn.go_home") }}</a>
+    <h2 class="uk-h3 mb-3">{{ _("error.title") }}</h2>
+    <p class="text-lg text-muted-foreground mb-2">{{ detail }}</p>
+    <p class="text-muted-foreground mb-8">{{ _("error.help") }}</p>
+    <div class="flex justify-center gap-3">
+        <a href="/" class="uk-btn uk-btn-primary no-underline">{{ _("btn.go_home") }}</a>
+        {% if not current_user %}<a href="/login" class="uk-btn uk-btn-secondary no-underline">{{ _("auth.login.link") }}</a>{% endif %}
+    </div>
 </div>
 {% endblock %}

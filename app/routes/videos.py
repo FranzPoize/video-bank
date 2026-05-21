@@ -53,12 +53,14 @@ def _video_to_card(video: dict) -> dict:
 
 def _account_context(active: dict) -> dict:
     """Return template auth/account context for protected pages."""
+    can_manage_videos = bool(active["membership"][permission_service.ADMIN]) or bool(
+        active["membership"][permission_service.MANAGE_VIDEOS]
+    )
     return {
         "current_user": active["user"],
         "current_account": active["account"],
         "membership": active["membership"],
-        "can_manage_videos": bool(active["membership"][permission_service.ADMIN])
-        or bool(active["membership"][permission_service.MANAGE_VIDEOS]),
+        "can_manage_videos": can_manage_videos,
     }
 
 
@@ -187,9 +189,10 @@ async def list_videos(
 
 
 @router.get("/upload")
-async def upload_form(request: Request, active=Depends(require_active_account)):
+async def upload_form(request: Request, db=Depends(get_db), active=Depends(require_active_account)):
     """Show the upload form."""
     i18n = get_i18n(request)
+    await _require_video_manager(db, active)
     return templates.TemplateResponse(
         request,
         "upload.html",
@@ -300,6 +303,7 @@ async def video_detail(request: Request, video_id: int, db=Depends(get_db), acti
 async def edit_video_form(request: Request, video_id: int, db=Depends(get_db), active=Depends(require_active_account)):
     """Show the edit form for a video."""
     i18n = get_i18n(request)
+    await _require_video_manager(db, active)
     video = await video_service.get_video_with_tags(db, video_id, account_id=active["account"]["id"])
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
@@ -355,6 +359,7 @@ async def delete_video(video_id: int, db=Depends(get_db), active=Depends(require
 async def clip_form(request: Request, video_id: int, db=Depends(get_db), active=Depends(require_active_account)):
     """Show the clip creator interface for a video."""
     i18n = get_i18n(request)
+    await _require_video_manager(db, active)
     video = await video_service.get_video_with_tags(db, video_id, account_id=active["account"]["id"])
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")

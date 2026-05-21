@@ -9,7 +9,7 @@ from fastapi.responses import RedirectResponse
 
 from app.database import get_db
 from app.dependencies import require_active_account
-from app.services import match_service, permission_service
+from app.services import match_service, permission_service, video_service
 from app.services.stats_calculator import compute_all
 from app.templates import templates, get_i18n
 
@@ -28,12 +28,16 @@ _STAT_FIELDS = [
 
 def _account_context(active: dict) -> dict:
     """Return template auth/account context for protected pages."""
+    can_manage_matches = bool(active["membership"][permission_service.ADMIN]) or bool(
+        active["membership"][permission_service.MANAGE_MATCHES]
+    )
     return {
         "current_user": active["user"],
         "current_account": active["account"],
         "membership": active["membership"],
-        "can_manage_matches": bool(active["membership"][permission_service.ADMIN])
-        or bool(active["membership"][permission_service.MANAGE_MATCHES]),
+        "can_manage_matches": can_manage_matches,
+        "can_manage_videos": bool(active["membership"][permission_service.ADMIN])
+        or bool(active["membership"][permission_service.MANAGE_VIDEOS]),
     }
 
 
@@ -91,9 +95,10 @@ async def list_matches(request: Request, db=Depends(get_db), active=Depends(requ
 
 
 @router.get("/matches/new")
-async def new_match_form(request: Request, active=Depends(require_active_account)):
+async def new_match_form(request: Request, db=Depends(get_db), active=Depends(require_active_account)):
     """Show the create match form."""
     i18n = get_i18n(request)
+    await _require_match_manager(db, active)
     return templates.TemplateResponse(
         request,
         "match_form.html",
@@ -201,6 +206,7 @@ async def match_video_player(
 async def edit_match_form(request: Request, match_id: int, db=Depends(get_db), active=Depends(require_active_account)):
     """Show the edit match form."""
     i18n = get_i18n(request)
+    await _require_match_manager(db, active)
     match = await match_service.get_match(db, match_id, account_id=active["account"]["id"])
     if match is None:
         raise HTTPException(status_code=404, detail="Match not found")
@@ -304,7 +310,11 @@ async def unlink_video(
     account_id = active["account"]["id"]
     if await match_service.get_match(db, match_id, account_id=account_id) is None:
         raise HTTPException(status_code=404, detail="Match not found")
-    await match_service.unlink_video(db, match_id, video_id, account_id=account_id)
+    if await video_service.get_video(db, video_id, account_id=account_id) is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    unlinked = await match_service.unlink_video(db, match_id, video_id, account_id=account_id)
+    if not unlinked:
+        raise HTTPException(status_code=404, detail="Video link not found")
 
     # Refresh data for HTMX fragment re-render
     result = await match_service.get_match_with_videos(db, match_id, account_id=account_id)

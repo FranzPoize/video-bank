@@ -26,6 +26,8 @@ def _account_context(active: dict) -> dict:
         "current_account": active["account"],
         "membership": active["membership"],
         "can_manage_tags": can_manage_tags,
+        "can_manage_videos": bool(active["membership"][permission_service.ADMIN])
+        or bool(active["membership"][permission_service.MANAGE_VIDEOS]),
     }
 
 

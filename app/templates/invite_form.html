@@ -7,6 +7,7 @@
         <div>
             <h1 class="uk-h2 mb-2">{{ _("invitation.new.title") }}</h1>
             <p class="text-muted-foreground">{{ current_account.display_name }}</p>
+            <p class="text-muted-foreground mt-1">{{ _("invitation.new.intro") }}</p>
         </div>
         <a href="/account/members" class="uk-btn uk-btn-ghost no-underline">{{ _("account.members.title") }}</a>
     </div>
@@ -14,6 +15,12 @@
     {% if sent %}
     <div class="uk-alert uk-alert-success" data-uk-alert>
         <p>{{ _("invitation.new.sent") }}</p>
+        <p>{{ _("invitation.new.sent_hint") }}</p>
+    </div>
+    {% endif %}
+    {% if revoked %}
+    <div class="uk-alert uk-alert-success" data-uk-alert>
+        <p>{{ _("invitation.new.revoked") }}</p>
     </div>
     {% endif %}
     {% if error == "invalid" %}
@@ -28,14 +35,29 @@
     {% endif %}
 
     <div class="uk-card uk-card-body">
+        <div class="mb-5 rounded-lg border border-border bg-muted/40 p-4">
+            {% if pending_invitations %}
+            <h2 class="uk-h4 mb-2">{{ _("invitation.pending.title") }}</h2>
+            <ul class="uk-list uk-list-divider">
+                {% for invitation in pending_invitations %}
+                <li>{{ invitation.invited_email }}</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <h2 class="uk-h4 mb-2">{{ _("invitation.pending.empty_title") }}</h2>
+            <p class="text-muted-foreground">{{ _("invitation.pending.empty_hint") }}</p>
+            {% endif %}
+        </div>
         <form method="post" action="/account/invitations" class="space-y-5">
             <div>
                 <label for="email" class="uk-form-label">{{ _("auth.email") }}</label>
-                <input id="email" name="email" type="email" class="uk-input" value="{{ email }}" required>
+                <input id="email" name="email" type="email" class="uk-input" value="{{ email }}" aria-describedby="invite-email-help" required>
+                <p id="invite-email-help" class="text-sm text-muted-foreground mt-1">{{ _("invitation.new.email_help") }}</p>
             </div>
 
             <fieldset class="space-y-3">
                 <legend class="font-semibold">{{ _("account.members.capabilities") }}</legend>
+                <p class="text-sm text-muted-foreground">{{ _("invitation.new.capabilities_help") }}</p>
                 {% for capability in capabilities %}
                 <label class="flex items-center gap-2">
                     <input type="checkbox" name="capabilities" value="{{ capability }}" {% if selected_capabilities.get(capability) %}checked{% endif %}>

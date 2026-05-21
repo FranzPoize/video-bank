@@ -10,6 +10,7 @@
         <p>{{ _("invitation.accept.intro") }}</p>
         <p class="font-semibold">{{ invitation.account_display_name }}</p>
         <p class="text-muted-foreground">{{ invitation.invited_email }}</p>
+        <p class="text-muted-foreground">{{ _("invitation.accept.email_hint") }}</p>
         <form method="post" action="/invitations/accept">
             <input type="hidden" name="token" value="{{ token }}">
             <button type="submit" class="uk-btn uk-btn-primary">{{ _("invitation.accept.submit") }}</button>
@@ -18,6 +19,7 @@
     {% else %}
     <div class="uk-alert uk-alert-destructive" data-uk-alert>
         <p>{{ _("invitation.result.invalid") }}</p>
+        <p>{{ _("invitation.result.invalid_hint") }}</p>
     </div>
     {% endif %}
 </div>

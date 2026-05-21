@@ -11,10 +11,12 @@
                 {{ _("video.uploaded") }} {{ video.upload_date }} &middot; {{ "%.1f"|format(video.file_size / (1024*1024)) }} {{ _("video.mb") }}
             </p>
         </div>
+        {% if can_manage_videos %}
         <div class="actions">
             <a href="/videos/{{ video.id }}/clip" class="uk-btn uk-btn-primary uk-btn-sm">{{ _("btn.clip") }}</a>
             <a href="/videos/{{ video.id }}/edit" class="uk-btn uk-btn-primary uk-btn-sm">{{ _("btn.edit") }}</a>
         </div>
+        {% endif %}
     </div>
 
     {% if video_matches and video_matches|length > 0 %}

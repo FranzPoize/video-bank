@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 import aiosqlite
 
-from app.services import security_service
+from app.services import account_service, security_service
 
 
 DEFAULT_SESSION_TTL = timedelta(days=30)
@@ -139,6 +139,11 @@ async def update_active_account(
     session = await load_session(db, token)
     if session is None:
         return None
+
+    if active_account_id is not None:
+        membership = await account_service.get_membership(db, session["user_id"], active_account_id)
+        if membership is None:
+            return None
 
     await db.execute(
         """

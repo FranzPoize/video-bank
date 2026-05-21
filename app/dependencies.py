@@ -16,6 +16,29 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() in {"1", "true", "yes"}
 
 
+def _expired_session_cookie_header() -> str:
+    """Return a Set-Cookie header value that clears the auth session cookie."""
+    parts = [
+        f"{SESSION_COOKIE_NAME}=",
+        "Max-Age=0",
+        "Path=/",
+        f"SameSite={SESSION_COOKIE_SAMESITE}",
+    ]
+    if SESSION_COOKIE_HTTPONLY:
+        parts.append("HttpOnly")
+    if SESSION_COOKIE_SECURE:
+        parts.append("Secure")
+    return "; ".join(parts)
+
+
+def _redirect_to_login(*, clear_cookie: bool = False) -> HTTPException:
+    """Build a login redirect exception, optionally clearing a stale cookie."""
+    headers = {"Location": "/login"}
+    if clear_cookie:
+        headers["Set-Cookie"] = _expired_session_cookie_header()
+    return HTTPException(status_code=303, headers=headers)
+
+
 async def get_current_user_optional(request: Request, db=Depends(get_db)) -> dict | None:
     """Return the current session/user context, or None for anonymous requests."""
     token = request.cookies.get(SESSION_COOKIE_NAME)
@@ -38,7 +61,7 @@ async def require_current_user(request: Request, db=Depends(get_db)) -> dict:
     """Require a valid current session/user context."""
     current_user = await get_current_user_optional(request, db)
     if current_user is None:
-        raise HTTPException(status_code=303, headers={"Location": "/login"})
+        raise _redirect_to_login(clear_cookie=bool(request.cookies.get(SESSION_COOKIE_NAME)))
     return current_user
 
 

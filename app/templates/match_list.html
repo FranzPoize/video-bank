@@ -4,9 +4,11 @@
 {% block content %}
 <div class="page-header">
     <h1 class="uk-h2">{{ _("page.matches") }}</h1>
+    {% if can_manage_matches %}
     <div class="actions">
         <a href="/matches/new" class="uk-btn uk-btn-primary">{{ _("match.new") }}</a>
     </div>
+    {% endif %}
 </div>
 
 {% if year_summary and year_summary|length > 0 %}
@@ -106,7 +108,7 @@
                 <th class="uk-text-center">{{ _("stat.blk") }}</th>
                 <th class="uk-text-center">{{ _("stat.tov") }}</th>
                 <th class="uk-text-center">{{ _("stat.pf") }}</th>
-                <th></th>
+                {% if can_manage_matches %}<th></th>{% endif %}
             </tr>
         </thead>
         <tbody>
@@ -134,9 +136,9 @@
                 <td class="uk-text-center">{{ match.blocks if match.blocks is not none else "—" }}</td>
                 <td class="uk-text-center">{{ match.turnovers if match.turnovers is not none else "—" }}</td>
                 <td class="uk-text-center">{{ match.personal_fouls if match.personal_fouls is not none else "—" }}</td>
-                <td>
+                {% if can_manage_matches %}<td>
                     <a href="/matches/{{ match.id }}" class="uk-btn uk-btn-default uk-btn-xs">{{ _("btn.edit") }}</a>
-                </td>
+                </td>{% endif %}
             </tr>
             {% endfor %}
         </tbody>
@@ -145,7 +147,7 @@
 {% else %}
 <div class="empty-state">
     <p>{{ _("match.no_matches") }}</p>
-    <p class="mt-4"><a href="/matches/new" class="uk-btn uk-btn-primary">{{ _("match.create_first") }}</a></p>
+    {% if can_manage_matches %}<p class="mt-4"><a href="/matches/new" class="uk-btn uk-btn-primary">{{ _("match.create_first") }}</a></p>{% endif %}
 </div>
 {% endif %}
 {% endblock %}
