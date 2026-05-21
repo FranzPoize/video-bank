@@ -5,7 +5,69 @@ Run with: pytest tests/test_matches.py -v
 """
 
 import pytest
-from tests.conftest import create_test_video
+from tests.conftest import create_test_video, login_test_user
+
+
+class TestCheckpoint3MatchRouteAuth:
+    """Route-level auth, account isolation, and capability checks for matches."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.no_auto_auth
+    async def test_anonymous_home_redirects_to_login(self, client):
+        """The match list home page is protected for anonymous users."""
+        response = await client.get("/", follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers["location"] == "/login"
+
+    @pytest.mark.asyncio
+    async def test_cross_account_match_access_returns_not_found(self, client, db):
+        """A user cannot see another account's match detail."""
+        response = await client.post(
+            "/api/matches",
+            data={"name": "Private Match", "match_date": "2026-05-20"},
+            follow_redirects=False,
+        )
+        match_id = int(response.headers["location"].rsplit("/", 1)[1])
+        client.cookies.clear()
+        await login_test_user(client, db, email="other-match@example.com")
+
+        detail = await client.get(f"/matches/{match_id}")
+
+        assert detail.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_user_without_manage_matches_cannot_create_match(self, client, db):
+        """Match mutations require manage_matches or admin."""
+        client.cookies.clear()
+        await login_test_user(
+            client,
+            db,
+            email="viewer-match@example.com",
+            capabilities={"manage_matches": False, "admin": False},
+        )
+
+        response = await client.post(
+            "/api/matches",
+            data={"name": "Blocked", "match_date": "2026-05-20"},
+        )
+
+        assert response.status_code == 403
+
+
+async def _create_account(db, name: str = "Account") -> int:
+    cursor = await db.execute("INSERT INTO accounts (display_name) VALUES (?)", (name,))
+    await db.commit()
+    return cursor.lastrowid
+
+
+async def _create_account_video(db, account_id: int, name: str) -> int:
+    cursor = await db.execute(
+        """INSERT INTO videos (name, filename, original_name, mime_type, file_size, account_id)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (name, f"{name}.mp4", f"{name}.mp4", "video/mp4", 100, account_id),
+    )
+    await db.commit()
+    return cursor.lastrowid
 
 
 class TestStatsCalculator:
@@ -344,6 +406,80 @@ class TestMatchService:
         matches = await get_video_matches(db, 1)
         assert len(matches) == 2
         assert matches[0]["name"] == "Match B"
+
+    @pytest.mark.asyncio
+    async def test_matches_are_isolated_by_account(self, db):
+        """Account-scoped reads and writes only see the requested account."""
+        from app.services.match_service import (
+            compute_year_summary,
+            create_match,
+            delete_match,
+            get_match,
+            list_matches,
+            update_match,
+        )
+
+        account_a = await _create_account(db, "Team A")
+        account_b = await _create_account(db, "Team B")
+        match_a = await create_match(
+            db, name="Account A Match", match_date="2026-05-01", account_id=account_a, points=10
+        )
+        match_b = await create_match(
+            db, name="Account B Match", match_date="2026-05-02", account_id=account_b, points=20
+        )
+
+        assert match_a["account_id"] == account_a
+        assert await get_match(db, match_a["id"], account_id=account_b) is None
+        assert await get_match(db, match_b["id"], account_id=account_a) is None
+
+        account_a_matches = await list_matches(db, account_id=account_a)
+        assert [m["name"] for m in account_a_matches] == ["Account A Match"]
+
+        assert await update_match(db, match_b["id"], account_id=account_a, name="Leaked") is None
+        assert (await get_match(db, match_b["id"], account_id=account_b))["name"] == "Account B Match"
+
+        assert await delete_match(db, match_b["id"], account_id=account_a) is False
+        assert await get_match(db, match_b["id"], account_id=account_b) is not None
+
+        summary = await compute_year_summary(db, account_id=account_a)
+        assert summary[-1]["match_count"] == 1
+        assert summary[-1]["points"] == 10.0
+
+    @pytest.mark.asyncio
+    async def test_cross_account_linking_is_rejected_safely(self, db):
+        """Link/unlink helpers do not create cross-account match/video links."""
+        from app.services.match_service import (
+            create_match,
+            get_match_with_videos,
+            get_unlinked_videos,
+            get_video_matches,
+            link_video,
+            unlink_video,
+        )
+
+        account_a = await _create_account(db, "Team A")
+        account_b = await _create_account(db, "Team B")
+        match_a = await create_match(db, name="A Match", match_date="2026-05-01", account_id=account_a)
+        match_b = await create_match(db, name="B Match", match_date="2026-05-02", account_id=account_b)
+        video_a = await _create_account_video(db, account_a, "A Video")
+        video_b = await _create_account_video(db, account_b, "B Video")
+
+        assert await link_video(db, match_a["id"], video_b, account_id=account_a) is False
+        assert await link_video(db, match_b["id"], video_a, account_id=account_b) is False
+
+        cursor = await db.execute("SELECT COUNT(*) AS cnt FROM match_videos")
+        row = await cursor.fetchone()
+        assert row["cnt"] == 0
+
+        assert await link_video(db, match_a["id"], video_a, account_id=account_a) is True
+        assert await unlink_video(db, match_a["id"], video_a, account_id=account_b) is False
+
+        with_videos = await get_match_with_videos(db, match_a["id"], account_id=account_a)
+        assert [video["id"] for video in with_videos["videos"]] == [video_a]
+
+        assert await get_match_with_videos(db, match_a["id"], account_id=account_b) is None
+        assert [video["id"] for video in await get_unlinked_videos(db, match_a["id"], account_id=account_a)] == []
+        assert [match["id"] for match in await get_video_matches(db, video_a, account_id=account_b)] == []
 
 
 class TestMatchRoutes:

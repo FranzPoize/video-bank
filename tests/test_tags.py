@@ -5,7 +5,54 @@ Run with: pytest tests/test_tags.py -v
 """
 
 import pytest
-from tests.conftest import create_test_video
+from tests.conftest import create_test_video, login_test_user
+
+
+class TestCheckpoint3TagRouteAuth:
+    """Route-level account and capability checks for tags/settings."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.no_auto_auth
+    async def test_anonymous_settings_redirects_to_login(self, client):
+        """Settings is protected for anonymous users."""
+        response = await client.get("/settings", follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers["location"] == "/login"
+
+    @pytest.mark.asyncio
+    async def test_cross_account_tag_access_returns_not_found(self, client, db):
+        """Tag rename/delete cannot target another account's tag."""
+        await create_test_video(client, "Tagged", "private-tag")
+        cursor = await db.execute("SELECT id FROM tags WHERE name = 'private-tag'")
+        tag = await cursor.fetchone()
+        client.cookies.clear()
+        await login_test_user(client, db, email="other-tag@example.com")
+
+        response = await client.post(f"/api/tags/{tag['id']}/rename", data={"new_name": "leak"})
+
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_member_without_manage_tags_can_read_settings_but_not_rename(self, client, db):
+        """Settings read is allowed to members, but tag mutation requires manage_tags."""
+        client.cookies.clear()
+        context = await login_test_user(
+            client,
+            db,
+            email="viewer-tag@example.com",
+            capabilities={"manage_tags": False, "admin": False},
+        )
+        tag_id = (await db.execute(
+            "INSERT INTO tags (name, account_id) VALUES ('own-tag', ?)",
+            (context["account"]["id"],),
+        )).lastrowid
+        await db.commit()
+
+        settings = await client.get("/settings")
+        rename = await client.post(f"/api/tags/{tag_id}/rename", data={"new_name": "blocked"})
+
+        assert settings.status_code == 200
+        assert rename.status_code == 403
 
 
 class TestTagCreation:
@@ -226,6 +273,104 @@ class TestTagServiceFunctions:
         assert tag_dict["tag1"]["video_count"] == 2
         assert tag_dict["tag2"]["video_count"] == 1
         assert tag_dict["tag3"]["video_count"] == 0  # no associations
+
+
+class TestTagAccountScoping:
+    """Service-level account isolation tests for tags."""
+
+    @pytest.mark.asyncio
+    async def test_tag_names_are_unique_per_account(self, db):
+        """The same normalized tag name can exist in different accounts."""
+        from app.services import tag_service
+
+        await db.execute("INSERT INTO accounts (display_name) VALUES ('Account 1')")
+        await db.execute("INSERT INTO accounts (display_name) VALUES ('Account 2')")
+        await db.commit()
+
+        tag1_id = await tag_service.get_or_create_tag(db, "Shared", account_id=1)
+        tag2_id = await tag_service.get_or_create_tag(db, "shared", account_id=2)
+        tag1_again_id = await tag_service.get_or_create_tag(db, "shared", account_id=1)
+
+        assert tag1_id != tag2_id
+        assert tag1_again_id == tag1_id
+
+    @pytest.mark.asyncio
+    async def test_list_and_get_video_tags_filter_by_account(self, db):
+        """Account-scoped reads return only tags for the requested account."""
+        from app.services import tag_service
+
+        await db.execute("INSERT INTO accounts (display_name) VALUES ('Account 1')")
+        await db.execute("INSERT INTO accounts (display_name) VALUES ('Account 2')")
+        await db.execute("""
+            INSERT INTO videos (name, filename, original_name, mime_type, file_size, account_id)
+            VALUES ('Video 1', 'v1.mp4', 'v1.mp4', 'video/mp4', 100, 1)
+        """)
+        await db.execute("""
+            INSERT INTO videos (name, filename, original_name, mime_type, file_size, account_id)
+            VALUES ('Video 2', 'v2.mp4', 'v2.mp4', 'video/mp4', 100, 2)
+        """)
+        await db.commit()
+
+        await tag_service.set_video_tags(db, 1, ["shared", "account-one"], account_id=1)
+        await tag_service.set_video_tags(db, 2, ["shared", "account-two"], account_id=2)
+
+        account1_tags = await tag_service.list_all_tags(db, account_id=1)
+        account2_tags = await tag_service.list_all_tags(db, account_id=2)
+
+        assert [tag["name"] for tag in account1_tags] == ["account-one", "shared"]
+        assert [tag["name"] for tag in account2_tags] == ["account-two", "shared"]
+        assert await tag_service.get_video_tags(db, 1, account_id=1) == ["account-one", "shared"]
+        assert await tag_service.get_video_tags(db, 1, account_id=2) == []
+
+    @pytest.mark.asyncio
+    async def test_set_update_delete_verify_account_ownership(self, db):
+        """Mutations behave as not found when ids belong to another account."""
+        from app.services import tag_service
+
+        await db.execute("INSERT INTO accounts (display_name) VALUES ('Account 1')")
+        await db.execute("INSERT INTO accounts (display_name) VALUES ('Account 2')")
+        await db.execute("""
+            INSERT INTO videos (name, filename, original_name, mime_type, file_size, account_id)
+            VALUES ('Video 1', 'v1.mp4', 'v1.mp4', 'video/mp4', 100, 1)
+        """)
+        await db.commit()
+
+        tag_id = await tag_service.get_or_create_tag(db, "owned", account_id=1)
+
+        with pytest.raises(ValueError, match="Video not found"):
+            await tag_service.set_video_tags(db, 1, ["wrong-account"], account_id=2)
+
+        with pytest.raises(ValueError, match="Tag not found"):
+            await tag_service.update_tag(db, tag_id, "renamed", account_id=2)
+
+        assert await tag_service.delete_tag(db, tag_id, account_id=2) is False
+        assert await tag_service.get_tag(db, tag_id, account_id=1) is not None
+
+    @pytest.mark.asyncio
+    async def test_tag_counts_are_account_scoped(self, db):
+        """Usage counts include only videos from the requested account."""
+        from app.services import tag_service
+
+        await db.execute("INSERT INTO accounts (display_name) VALUES ('Account 1')")
+        await db.execute("INSERT INTO accounts (display_name) VALUES ('Account 2')")
+        await db.execute("""
+            INSERT INTO videos (name, filename, original_name, mime_type, file_size, account_id)
+            VALUES ('Video 1', 'v1.mp4', 'v1.mp4', 'video/mp4', 100, 1)
+        """)
+        await db.execute("""
+            INSERT INTO videos (name, filename, original_name, mime_type, file_size, account_id)
+            VALUES ('Video 2', 'v2.mp4', 'v2.mp4', 'video/mp4', 100, 2)
+        """)
+        await db.commit()
+
+        await tag_service.set_video_tags(db, 1, ["shared"], account_id=1)
+        await tag_service.set_video_tags(db, 2, ["shared"], account_id=2)
+
+        account1_counts = await tag_service.list_all_tags_with_counts(db, account_id=1)
+        account2_counts = await tag_service.list_all_tags_with_counts(db, account_id=2)
+
+        assert account1_counts == [{"id": account1_counts[0]["id"], "name": "shared", "account_id": 1, "video_count": 1}]
+        assert account2_counts == [{"id": account2_counts[0]["id"], "name": "shared", "account_id": 2, "video_count": 1}]
 
 
 class TestTagManagementRoutes:

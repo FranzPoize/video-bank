@@ -136,6 +136,7 @@ async def cut_video(
     video_id: int,
     start_time: float,
     end_time: float,
+    account_id: int | None = None,
 ) -> dict:
     """Remove the segment [start_time, end_time] from a video in-place.
 
@@ -156,7 +157,7 @@ async def cut_video(
     import shutil as sh_mod
 
     # 1. Fetch video
-    video = await video_service.get_video(db, video_id)
+    video = await video_service.get_video(db, video_id, account_id=account_id)
     if video is None:
         raise ValueError(f"Video with id {video_id} not found.")
 
@@ -233,8 +234,8 @@ async def cut_video(
 
         # 4. Update DB
         await db.execute(
-            "UPDATE videos SET file_size = ? WHERE id = ?",
-            (new_size, video_id),
+            "UPDATE videos SET file_size = ? WHERE id = ? AND account_id IS ?",
+            (new_size, video_id, account_id),
         )
         await db.commit()
 
@@ -252,7 +253,7 @@ async def cut_video(
         start_time,
         end_time,
     )
-    return await video_service.get_video(db, video_id)
+    return await video_service.get_video(db, video_id, account_id=account_id)
 
 
 # ── Public API ───────────────────────────────────────────────────
@@ -263,6 +264,7 @@ async def create_clip(
     source_video_id: int,
     start_time: float,
     end_time: float,
+    account_id: int | None = None,
 ) -> dict:
     """Extract a clip from a source video and return the new video record.
 
@@ -277,7 +279,7 @@ async def create_clip(
     8. Return the new video dict
     """
     # 1. Fetch source video
-    source = await video_service.get_video(db, source_video_id)
+    source = await video_service.get_video(db, source_video_id, account_id=account_id)
     if source is None:
         raise ValueError(f"Source video with id {source_video_id} not found.")
 
@@ -339,10 +341,11 @@ async def create_clip(
     # 6. Create DB record and copy tags within a transaction
     try:
         cursor = await db.execute(
-            """INSERT INTO videos (name, filename, original_name, mime_type, file_size,
+            """INSERT INTO videos (account_id, name, filename, original_name, mime_type, file_size,
                                    source_video_id, clip_start, clip_end)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
+                account_id,
                 f"{source['name']} (clip)",
                 clip_filename,
                 clip_filename,
@@ -356,9 +359,13 @@ async def create_clip(
         clip_id = cursor.lastrowid
 
         # 7. Copy source video tags
-        source_tags = await tag_service.get_video_tags(db, source_video_id)
+        source_tags = await tag_service.get_video_tags(
+            db,
+            source_video_id,
+            account_id=account_id,
+        )
         if source_tags:
-            await tag_service.set_video_tags(db, clip_id, source_tags)
+            await tag_service.set_video_tags(db, clip_id, source_tags, account_id=account_id)
 
         await db.commit()
     except Exception:
@@ -376,4 +383,4 @@ async def create_clip(
         start_time,
         end_time,
     )
-    return await video_service.get_video(db, clip_id)
+    return await video_service.get_video(db, clip_id, account_id=account_id)

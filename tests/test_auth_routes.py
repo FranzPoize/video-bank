@@ -71,7 +71,17 @@ class TestEmailVerificationRoute:
         verified = await auth_service.get_user_by_id(db, user["id"])
         assert verified["is_email_verified"] == 1
 
-        account = await (await db.execute("SELECT * FROM accounts")).fetchone()
+        account = await (
+            await db.execute(
+                """
+                SELECT a.*
+                FROM accounts a
+                JOIN account_memberships am ON am.account_id = a.id
+                WHERE am.user_id = ?
+                """,
+                (user["id"],),
+            )
+        ).fetchone()
         membership = await (
             await db.execute(
                 "SELECT * FROM account_memberships WHERE user_id = ? AND account_id = ?",
@@ -156,7 +166,18 @@ class TestLoginLogoutRoutes:
 
         raw_session_token = response.cookies[SESSION_COOKIE_NAME]
         session = await session_service.load_session(db, raw_session_token)
-        account = await (await db.execute("SELECT * FROM accounts")).fetchone()
+        account = await (
+            await db.execute(
+                """
+                SELECT a.*
+                FROM accounts a
+                JOIN account_memberships am ON am.account_id = a.id
+                JOIN users u ON u.id = am.user_id
+                WHERE u.normalized_email = ?
+                """,
+                ("owner@example.com",),
+            )
+        ).fetchone()
         assert session is not None
         assert session["active_account_id"] == account["id"]
 
@@ -184,6 +205,7 @@ class TestLoginLogoutRoutes:
         anonymous = await client.get("/login")
         assert "/signup" in anonymous.text
         assert "/login" in anonymous.text
+        assert 'hx-get="/api/space"' not in anonymous.text
 
         token = await _create_verified_signup(db, "owner@example.com", "correct-password")
         await auth_service.verify_email_token(db, token, create_account=True)
@@ -192,6 +214,7 @@ class TestLoginLogoutRoutes:
         authenticated = await client.get("/login")
         assert "owner@example.com" in authenticated.text
         assert "/logout" in authenticated.text
+        assert 'hx-get="/api/space"' in authenticated.text
 
 
 async def _create_verified_signup(db, email: str, password: str) -> str:

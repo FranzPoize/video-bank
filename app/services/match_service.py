@@ -18,6 +18,7 @@ async def create_match(
     db: aiosqlite.Connection,
     name: str,
     match_date: str,
+    account_id: int | None = None,
     opponent: str = "",
     location: str = "",
     notes: str = "",
@@ -60,9 +61,9 @@ async def create_match(
         stat_fields.append(key)
         stat_values.append(val if val is not None else None)  # Keep None as NULL
 
-    columns = ", ".join(["name", "match_date", "opponent", "location", "notes"] + stat_fields)
-    placeholders = ", ".join(["?"] * (5 + len(stat_fields)))
-    values = [name.strip(), match_date.strip(), opponent, location, notes] + stat_values
+    columns = ", ".join(["name", "match_date", "opponent", "location", "notes", "account_id"] + stat_fields)
+    placeholders = ", ".join(["?"] * (6 + len(stat_fields)))
+    values = [name.strip(), match_date.strip(), opponent, location, notes, account_id] + stat_values
 
     cursor = await db.execute(
         f"INSERT INTO matches ({columns}) VALUES ({placeholders})",
@@ -71,26 +72,41 @@ async def create_match(
     await db.commit()
     match_id = cursor.lastrowid
     logger.info("Match created: id=%d, name=%s", match_id, name)
-    return await get_match(db, match_id)
+    return await get_match(db, match_id, account_id=account_id)
 
 
-async def get_match(db: aiosqlite.Connection, match_id: int) -> dict | None:
+async def get_match(db: aiosqlite.Connection, match_id: int, account_id: int | None = None) -> dict | None:
     """Fetch a single match by ID. Returns None if not found."""
-    cursor = await db.execute("SELECT * FROM matches WHERE id = ?", (match_id,))
+    if account_id is None:
+        cursor = await db.execute("SELECT * FROM matches WHERE id = ?", (match_id,))
+    else:
+        cursor = await db.execute(
+            "SELECT * FROM matches WHERE id = ? AND account_id = ?",
+            (match_id, account_id),
+        )
     row = await cursor.fetchone()
     return dict(row) if row else None
 
 
-async def list_matches(db: aiosqlite.Connection) -> list[dict]:
+async def list_matches(db: aiosqlite.Connection, account_id: int | None = None) -> list[dict]:
     """Return all matches ordered by match_date descending."""
-    cursor = await db.execute(
-        "SELECT * FROM matches ORDER BY match_date DESC"
-    )
+    if account_id is None:
+        cursor = await db.execute("SELECT * FROM matches ORDER BY match_date DESC")
+    else:
+        cursor = await db.execute(
+            "SELECT * FROM matches WHERE account_id = ? ORDER BY match_date DESC",
+            (account_id,),
+        )
     rows = await cursor.fetchall()
     return [dict(r) for r in rows]
 
 
-async def update_match(db: aiosqlite.Connection, match_id: int, **fields) -> dict | None:
+async def update_match(
+    db: aiosqlite.Connection,
+    match_id: int,
+    account_id: int | None = None,
+    **fields,
+) -> dict | None:
     """Update specified fields on a match.
 
     Accepts any match column as a keyword argument.
@@ -108,26 +124,41 @@ async def update_match(db: aiosqlite.Connection, match_id: int, **fields) -> dic
 
     updates = {k: v for k, v in fields.items() if k in allowed_fields}
     if not updates:
-        return await get_match(db, match_id)
+        return await get_match(db, match_id, account_id=account_id)
 
     set_clause = ", ".join(f"{k} = ?" for k in updates)
     values = list(updates.values()) + [match_id]
 
-    await db.execute(
-        f"UPDATE matches SET {set_clause} WHERE id = ?",
-        values,
-    )
+    if account_id is None:
+        cursor = await db.execute(
+            f"UPDATE matches SET {set_clause} WHERE id = ?",
+            values,
+        )
+    else:
+        values.append(account_id)
+        cursor = await db.execute(
+            f"UPDATE matches SET {set_clause} WHERE id = ? AND account_id = ?",
+            values,
+        )
     await db.commit()
+    if cursor.rowcount == 0:
+        return None
     logger.info("Match updated: id=%d, fields=%s", match_id, list(updates.keys()))
-    return await get_match(db, match_id)
+    return await get_match(db, match_id, account_id=account_id)
 
 
-async def delete_match(db: aiosqlite.Connection, match_id: int) -> bool:
+async def delete_match(db: aiosqlite.Connection, match_id: int, account_id: int | None = None) -> bool:
     """Delete a match. Returns True if deleted, False if not found.
 
     ON DELETE CASCADE cleans up match_videos associations automatically.
     """
-    cursor = await db.execute("DELETE FROM matches WHERE id = ?", (match_id,))
+    if account_id is None:
+        cursor = await db.execute("DELETE FROM matches WHERE id = ?", (match_id,))
+    else:
+        cursor = await db.execute(
+            "DELETE FROM matches WHERE id = ? AND account_id = ?",
+            (match_id, account_id),
+        )
     await db.commit()
     deleted = cursor.rowcount > 0
     if deleted:
@@ -135,55 +166,103 @@ async def delete_match(db: aiosqlite.Connection, match_id: int) -> bool:
     return deleted
 
 
-async def link_video(db: aiosqlite.Connection, match_id: int, video_id: int):
-    """Link a video to a match. Raises IntegrityError on duplicate."""
+async def link_video(
+    db: aiosqlite.Connection,
+    match_id: int,
+    video_id: int,
+    account_id: int | None = None,
+) -> bool:
+    """Link an account-owned video to an account-owned match."""
+    if account_id is not None:
+        if await get_match(db, match_id, account_id=account_id) is None:
+            return False
+        cursor = await db.execute(
+            "SELECT id FROM videos WHERE id = ? AND account_id = ?",
+            (video_id, account_id),
+        )
+        if await cursor.fetchone() is None:
+            return False
     await db.execute(
         "INSERT OR IGNORE INTO match_videos (match_id, video_id) VALUES (?, ?)",
         (match_id, video_id),
     )
     await db.commit()
+    return True
 
 
-async def unlink_video(db: aiosqlite.Connection, match_id: int, video_id: int):
-    """Remove a video from a match."""
-    await db.execute(
-        "DELETE FROM match_videos WHERE match_id = ? AND video_id = ?",
-        (match_id, video_id),
-    )
+async def unlink_video(
+    db: aiosqlite.Connection,
+    match_id: int,
+    video_id: int,
+    account_id: int | None = None,
+) -> bool:
+    """Remove an account-owned video from an account-owned match."""
+    if account_id is None:
+        cursor = await db.execute(
+            "DELETE FROM match_videos WHERE match_id = ? AND video_id = ?",
+            (match_id, video_id),
+        )
+    else:
+        cursor = await db.execute(
+            """DELETE FROM match_videos
+               WHERE match_id = ?
+                 AND video_id = ?
+                 AND EXISTS (SELECT 1 FROM matches m WHERE m.id = match_videos.match_id AND m.account_id = ?)
+                 AND EXISTS (SELECT 1 FROM videos v WHERE v.id = match_videos.video_id AND v.account_id = ?)""",
+            (match_id, video_id, account_id, account_id),
+        )
     await db.commit()
+    return cursor.rowcount > 0
 
 
-async def get_match_with_videos(db: aiosqlite.Connection, match_id: int) -> dict | None:
+async def get_match_with_videos(
+    db: aiosqlite.Connection,
+    match_id: int,
+    account_id: int | None = None,
+) -> dict | None:
     """Fetch a match along with its linked videos (each with tags)."""
-    match = await get_match(db, match_id)
+    match = await get_match(db, match_id, account_id=account_id)
     if match is None:
         return None
 
-    cursor = await db.execute(
-        """SELECT v.* FROM videos v
-           JOIN match_videos mv ON v.id = mv.video_id
-           WHERE mv.match_id = ?
-           ORDER BY v.upload_date DESC""",
-        (match_id,),
-    )
+    if account_id is None:
+        cursor = await db.execute(
+            """SELECT v.* FROM videos v
+               JOIN match_videos mv ON v.id = mv.video_id
+               WHERE mv.match_id = ?
+               ORDER BY v.upload_date DESC""",
+            (match_id,),
+        )
+    else:
+        cursor = await db.execute(
+            """SELECT v.* FROM videos v
+               JOIN match_videos mv ON v.id = mv.video_id
+               WHERE mv.match_id = ? AND v.account_id = ?
+               ORDER BY v.upload_date DESC""",
+            (match_id, account_id),
+        )
     videos = [dict(r) for r in await cursor.fetchall()]
 
     # Attach tags to each video
     from app.services.tag_service import get_video_tags
     for v in videos:
-        v["tags"] = await get_video_tags(db, v["id"])
+        v["tags"] = await get_video_tags(db, v["id"], account_id=account_id)
 
     match["videos"] = videos
     return match
 
 
-async def get_match_with_stats(db: aiosqlite.Connection, match_id: int) -> dict | None:
+async def get_match_with_stats(
+    db: aiosqlite.Connection,
+    match_id: int,
+    account_id: int | None = None,
+) -> dict | None:
     """Fetch a match with computed statistics.
 
     Returns dict with 'match' (raw) and 'computed' (derived stats).
     Returns None if match not found.
     """
-    match = await get_match(db, match_id)
+    match = await get_match(db, match_id, account_id=account_id)
     if match is None:
         return None
     return {
@@ -192,39 +271,73 @@ async def get_match_with_stats(db: aiosqlite.Connection, match_id: int) -> dict 
     }
 
 
-async def get_unlinked_videos(db: aiosqlite.Connection, match_id: int) -> list[dict]:
+async def get_unlinked_videos(
+    db: aiosqlite.Connection,
+    match_id: int,
+    account_id: int | None = None,
+) -> list[dict]:
     """Return videos NOT already linked to this match.
 
     Used for the 'Link Video' picker UI.
     """
-    cursor = await db.execute(
-        """SELECT v.id, v.name, v.filename, v.mime_type
-           FROM videos v
-           WHERE v.id NOT IN (
-               SELECT video_id FROM match_videos WHERE match_id = ?
-           )
-           ORDER BY v.upload_date DESC""",
-        (match_id,),
-    )
+    if account_id is not None and await get_match(db, match_id, account_id=account_id) is None:
+        return []
+
+    if account_id is None:
+        cursor = await db.execute(
+            """SELECT v.id, v.name, v.filename, v.mime_type
+               FROM videos v
+               WHERE v.id NOT IN (
+                   SELECT video_id FROM match_videos WHERE match_id = ?
+               )
+               ORDER BY v.upload_date DESC""",
+            (match_id,),
+        )
+    else:
+        cursor = await db.execute(
+            """SELECT v.id, v.name, v.filename, v.mime_type
+               FROM videos v
+               WHERE v.account_id = ?
+                 AND v.id NOT IN (
+                     SELECT video_id FROM match_videos WHERE match_id = ?
+                 )
+               ORDER BY v.upload_date DESC""",
+            (account_id, match_id),
+        )
     rows = await cursor.fetchall()
     return [dict(r) for r in rows]
 
 
-async def get_video_matches(db: aiosqlite.Connection, video_id: int) -> list[dict]:
+async def get_video_matches(
+    db: aiosqlite.Connection,
+    video_id: int,
+    account_id: int | None = None,
+) -> list[dict]:
     """Return all matches that a video is linked to."""
-    cursor = await db.execute(
-        """SELECT m.id, m.name, m.match_date
-           FROM matches m
-           JOIN match_videos mv ON m.id = mv.match_id
-           WHERE mv.video_id = ?
-           ORDER BY m.match_date DESC""",
-        (video_id,),
-    )
+    if account_id is None:
+        cursor = await db.execute(
+            """SELECT m.id, m.name, m.match_date
+               FROM matches m
+               JOIN match_videos mv ON m.id = mv.match_id
+               WHERE mv.video_id = ?
+               ORDER BY m.match_date DESC""",
+            (video_id,),
+        )
+    else:
+        cursor = await db.execute(
+            """SELECT m.id, m.name, m.match_date
+               FROM matches m
+               JOIN match_videos mv ON m.id = mv.match_id
+               JOIN videos v ON v.id = mv.video_id
+               WHERE mv.video_id = ? AND m.account_id = ? AND v.account_id = ?
+               ORDER BY m.match_date DESC""",
+            (video_id, account_id, account_id),
+        )
     rows = await cursor.fetchall()
     return [dict(r) for r in rows]
 
 
-async def compute_year_summary(db: aiosqlite.Connection) -> list[dict]:
+async def compute_year_summary(db: aiosqlite.Connection, account_id: int | None = None) -> list[dict]:
     """Compute per-year and overall stat averages from all matches.
 
     Returns a list of row dicts suitable for the summary table, one per
@@ -240,7 +353,13 @@ async def compute_year_summary(db: aiosqlite.Connection) -> list[dict]:
 
     Returns an empty list if there are no matches.
     """
-    cursor = await db.execute("SELECT * FROM matches ORDER BY match_date ASC")
+    if account_id is None:
+        cursor = await db.execute("SELECT * FROM matches ORDER BY match_date ASC")
+    else:
+        cursor = await db.execute(
+            "SELECT * FROM matches WHERE account_id = ? ORDER BY match_date ASC",
+            (account_id,),
+        )
     matches = [dict(r) for r in await cursor.fetchall()]
 
     if not matches:

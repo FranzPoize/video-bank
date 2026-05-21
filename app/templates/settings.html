@@ -26,7 +26,7 @@
             <div class="flex px-4 py-3 bg-muted font-semibold text-sm">
                 <div class="flex-[3]">{{ _("tag.name") }}</div>
                 <div class="flex-1 text-center">{{ _("tag.videos") }}</div>
-                <div class="flex-[2] text-right">{{ _("tag.actions") }}</div>
+                {% if can_manage_tags %}<div class="flex-[2] text-right">{{ _("tag.actions") }}</div>{% endif %}
             </div>
 
             <!-- Tag rows -->
@@ -36,16 +36,16 @@
                 <div id="tag-view-{{ tag.id }}" class="flex w-full items-center">
                     <div class="flex-[3] font-medium">{{ tag.name }}</div>
                     <div class="flex-1 text-center text-muted-foreground">{{ tag.video_count }}</div>
-                    <div class="flex-[2] text-right flex gap-2 justify-end">
+                    {% if can_manage_tags %}<div class="flex-[2] text-right flex gap-2 justify-end">
                         <button type="button" class="uk-btn uk-btn-ghost uk-btn-sm" onclick="toggleRename({{ tag.id }})">{{ _("tag.rename") }}</button>
                         <form action="/api/tags/{{ tag.id }}/delete" method="post" style="display: inline;" onsubmit="return confirm('{{ _("tag.confirm_delete") }}');">
                             <button type="submit" class="uk-btn uk-btn-destructive uk-btn-sm">{{ _("tag.delete") }}</button>
                         </form>
-                    </div>
+                    </div>{% endif %}
                 </div>
 
                 <!-- Edit mode (hidden initially) -->
-                <div id="tag-edit-{{ tag.id }}" class="hidden w-full">
+                {% if can_manage_tags %}<div id="tag-edit-{{ tag.id }}" class="hidden w-full">
                     <form action="/api/tags/{{ tag.id }}/rename" method="post" class="flex w-full items-center gap-2">
                         <div class="flex-[3]">
                             <input type="text" name="new_name" id="rename-input-{{ tag.id }}" value="{{ tag.name }}"
@@ -57,7 +57,7 @@
                             <button type="button" class="uk-btn uk-btn-ghost uk-btn-sm" onclick="toggleRename({{ tag.id }})">{{ _("tag.cancel") }}</button>
                         </div>
                     </form>
-                </div>
+                </div>{% endif %}
             </div>
             {% endfor %}
         </div>

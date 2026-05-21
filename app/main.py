@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -39,13 +40,12 @@ _project_root = Path(__file__).resolve().parent.parent
 app = FastAPI(title="Video Bank")
 app.add_middleware(CacheControlMiddleware)
 
-# Mount static directories for uploaded files
+# Ensure upload directories exist. Uploaded media is served only through
+# authenticated, account-scoped routes; do not mount /uploads publicly.
 uploads_dir = _project_root / "uploads"
 uploads_dir.mkdir(parents=True, exist_ok=True)
 (uploads_dir / "videos").mkdir(parents=True, exist_ok=True)
 (uploads_dir / "thumbnails").mkdir(parents=True, exist_ok=True)
-
-app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 # Mount static files (JS, CSS) at /static
 static_dir = _project_root / "app" / "static"
@@ -93,6 +93,9 @@ async def language_middleware(request: Request, call_next):
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc):
     """Return a styled error page for HTTP errors."""
+    if exc.status_code in {302, 303, 307, 308} and getattr(exc, "headers", None) and exc.headers.get("Location"):
+        return RedirectResponse(url=exc.headers["Location"], status_code=exc.status_code)
+
     # Get i18n context from request.state (set by middleware)
     i18n = getattr(request.state, "i18n", get_i18n_context(DEFAULT_LANG))
 
@@ -140,7 +143,7 @@ async def on_startup():
         )
     # ─────────────────────────────────────────────────────────────
 
-    await init_db(migration_version=6)
+    await init_db(migration_version=7)
 
     # Check for ffmpeg (required for clip creation)
     import shutil

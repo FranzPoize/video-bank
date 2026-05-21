@@ -6,6 +6,8 @@ Tests override this to use ":memory:" for isolation.
 """
 
 import os
+from collections.abc import Callable
+
 import aiosqlite
 
 DEFAULT_DB_PATH = os.environ.get(
@@ -95,6 +97,53 @@ CREATE INDEX IF NOT EXISTS idx_match_videos_match ON match_videos(match_id);
 
 IDX_MATCH_VIDEOS_VIDEO = """
 CREATE INDEX IF NOT EXISTS idx_match_videos_video ON match_videos(video_id);
+"""
+
+IDX_VIDEOS_ACCOUNT = """
+CREATE INDEX IF NOT EXISTS idx_videos_account_id ON videos(account_id);
+"""
+
+IDX_VIDEOS_ACCOUNT_UPLOAD_DATE = """
+CREATE INDEX IF NOT EXISTS idx_videos_account_upload_date
+ON videos(account_id, upload_date DESC);
+"""
+
+IDX_VIDEOS_ACCOUNT_SOURCE = """
+CREATE INDEX IF NOT EXISTS idx_videos_account_source
+ON videos(account_id, source_video_id);
+"""
+
+IDX_MATCHES_ACCOUNT_DATE = """
+CREATE INDEX IF NOT EXISTS idx_matches_account_date ON matches(account_id, match_date DESC);
+"""
+
+IDX_TAGS_ACCOUNT = """
+CREATE INDEX IF NOT EXISTS idx_tags_account_id ON tags(account_id, name);
+"""
+
+IDX_TAGS_ACCOUNT_NAME_UNIQUE = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_account_name_unique
+ON tags(account_id, name);
+"""
+
+IDX_VIDEO_TAGS_VIDEO_TAG = """
+CREATE INDEX IF NOT EXISTS idx_video_tags_video_tag
+ON video_tags(video_id, tag_id);
+"""
+
+IDX_VIDEO_TAGS_TAG_VIDEO = """
+CREATE INDEX IF NOT EXISTS idx_video_tags_tag_video
+ON video_tags(tag_id, video_id);
+"""
+
+IDX_MATCH_VIDEOS_MATCH_VIDEO = """
+CREATE INDEX IF NOT EXISTS idx_match_videos_match_video
+ON match_videos(match_id, video_id);
+"""
+
+IDX_MATCH_VIDEOS_VIDEO_MATCH = """
+CREATE INDEX IF NOT EXISTS idx_match_videos_video_match
+ON match_videos(video_id, match_id);
 """
 
 USERS_TABLE = """
@@ -237,8 +286,103 @@ CREATE INDEX IF NOT EXISTS idx_invitations_invited_normalized_email
 ON invitations(invited_normalized_email);
 """
 
+
+async def _table_has_column(db: aiosqlite.Connection, table: str, column: str) -> bool:
+    """Return whether a known application table has a column."""
+    allowed_tables = {"videos", "matches", "tags"}
+    if table not in allowed_tables:
+        raise ValueError(f"Unsupported schema table: {table}")
+    rows = await db.execute_fetchall(f"PRAGMA table_info({table})")
+    return any(row["name"] == column for row in rows)
+
+
+async def migrate_account_context(db: aiosqlite.Connection):
+    """Migration v7: add account context to existing domain rows.
+
+    Existing rows are attached to a deterministic fallback account so tests and
+    current single-user installations continue to have account-owned data. The
+    exact initial production administrator selection remains a parent/user
+    decision outside this schema migration.
+    """
+    await db.execute(
+        """
+        INSERT INTO accounts (display_name)
+        SELECT ?
+        WHERE NOT EXISTS (SELECT 1 FROM accounts)
+        """,
+        ("Default Account",),
+    )
+    default_account_rows = await db.execute_fetchall(
+        "SELECT MIN(id) AS id FROM accounts"
+    )
+    default_account_id = default_account_rows[0]["id"]
+
+    if not await _table_has_column(db, "videos", "account_id"):
+        await db.execute(
+            "ALTER TABLE videos ADD COLUMN account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE"
+        )
+    if not await _table_has_column(db, "matches", "account_id"):
+        await db.execute(
+            "ALTER TABLE matches ADD COLUMN account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE"
+        )
+
+    if default_account_id is not None:
+        await db.execute(
+            "UPDATE videos SET account_id = ? WHERE account_id IS NULL",
+            (default_account_id,),
+        )
+        await db.execute(
+            "UPDATE matches SET account_id = ? WHERE account_id IS NULL",
+            (default_account_id,),
+        )
+
+    if not await _table_has_column(db, "tags", "account_id"):
+        await db.commit()
+        await db.execute("PRAGMA foreign_keys = OFF")
+        await db.execute(
+            """
+            CREATE TABLE tags_v7 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
+                name TEXT NOT NULL,
+                UNIQUE(account_id, name)
+            )
+            """
+        )
+        await db.execute(
+            """
+            INSERT INTO tags_v7 (id, account_id, name)
+            SELECT id, ?, name FROM tags
+            """,
+            (default_account_id,),
+        )
+        await db.execute("DROP TABLE tags")
+        await db.execute("ALTER TABLE tags_v7 RENAME TO tags")
+        await db.commit()
+        await db.execute("PRAGMA foreign_keys = ON")
+    elif default_account_id is not None:
+        await db.execute(
+            "UPDATE tags SET account_id = ? WHERE account_id IS NULL",
+            (default_account_id,),
+        )
+
+    account_indexes = [
+        IDX_VIDEOS_ACCOUNT,
+        IDX_VIDEOS_ACCOUNT_UPLOAD_DATE,
+        IDX_VIDEOS_ACCOUNT_SOURCE,
+        IDX_MATCHES_ACCOUNT_DATE,
+        IDX_TAGS_ACCOUNT,
+        IDX_TAGS_ACCOUNT_NAME_UNIQUE,
+        IDX_VIDEO_TAGS_VIDEO_TAG,
+        IDX_VIDEO_TAGS_TAG_VIDEO,
+        IDX_MATCH_VIDEOS_MATCH_VIDEO,
+        IDX_MATCH_VIDEOS_VIDEO_MATCH,
+    ]
+    for stmt in account_indexes:
+        await db.execute(stmt)
+
 # These are applied incrementally per checkpoint
-# Each list element must be a single SQL statement (aiosqlite limitation)
+# Each list element is either a single SQL statement or a migration helper.
 MIGRATIONS = {
     1: [VIDEOS_SCHEMA],
     2: [],  # Reserved for future structural changes
@@ -275,6 +419,7 @@ MIGRATIONS = {
         IDX_INVITATIONS_ACCOUNT_STATE,
         IDX_INVITATIONS_INVITED_NORMALIZED_EMAIL,
     ],
+    7: [migrate_account_context],
 }
 
 
@@ -306,11 +451,15 @@ async def init_db(db_path: str | None = None, migration_version: int = 1):
         os.makedirs(db_dir, exist_ok=True)
     db = await aiosqlite.connect(path)
     await db.execute("PRAGMA foreign_keys = ON")
+    db.row_factory = aiosqlite.Row
     try:
         for version in range(1, migration_version + 1):
             for stmt in MIGRATIONS.get(version, []):
                 try:
-                    await db.execute(stmt)
+                    if isinstance(stmt, str):
+                        await db.execute(stmt)
+                    elif isinstance(stmt, Callable):
+                        await stmt(db)
                 except Exception as e:
                     # Ignore "duplicate column" errors from ALTER TABLE ADD COLUMN
                     err_str = str(e)

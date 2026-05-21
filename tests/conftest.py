@@ -9,6 +9,7 @@ Provides:
 
 import asyncio
 import os
+from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator
 from contextlib import contextmanager
 from unittest.mock import AsyncMock, patch
@@ -21,6 +22,12 @@ from httpx import ASGITransport, AsyncClient
 
 from app.database import init_db, get_db
 from app.main import app as _app
+from app.dependencies import AUTH_SESSION_COOKIE
+from app.services import account_service, security_service, session_service
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "no_auto_auth: disable checkpoint route auto-auth fixture")
 
 
 @pytest_asyncio.fixture
@@ -32,10 +39,14 @@ async def db() -> AsyncGenerator[aiosqlite.Connection, None]:
 
     # Initialize schema directly on this connection
     from app.database import MIGRATIONS
-    for version in range(1, 7):  # migration_version=6 (includes user/account schema)
+    for version in range(1, 8):  # migration_version=7 (includes account-scoped content)
         for stmt in MIGRATIONS.get(version, []):
-            await db_conn.execute(stmt)
+            if isinstance(stmt, str):
+                await db_conn.execute(stmt)
+            else:
+                await stmt(db_conn)
     await db_conn.commit()
+    await db_conn.execute("PRAGMA foreign_keys = ON")
 
     try:
         yield db_conn
@@ -156,3 +167,85 @@ async def create_test_video(client, name: str, tags: str = "") -> int:
         headers={"X-Requested-With": "XMLHttpRequest"},
     )
     return response.json()["id"]
+
+
+async def create_test_user_with_account(
+    db,
+    email: str = "user@example.com",
+    password: str = "password",
+    account_name: str = "Test Account",
+    capabilities: dict | None = None,
+) -> dict:
+    """Create a verified user, account membership, and active session token for route tests."""
+    cursor = await db.execute(
+        """
+        INSERT INTO users (email, normalized_email, password_hash, is_email_verified)
+        VALUES (?, ?, ?, 1)
+        """,
+        (email, email.strip().lower(), security_service.hash_password(password)),
+    )
+    await db.commit()
+    user_id = cursor.lastrowid
+
+    created = await account_service.create_account_with_admin_membership(db, user_id, account_name)
+    if capabilities is not None:
+        values = {
+            "manage_videos": 0,
+            "manage_matches": 0,
+            "manage_tags": 0,
+            "manage_account_settings": 0,
+            "manage_members": 0,
+            "admin": 0,
+        }
+        values.update({key: 1 if value else 0 for key, value in capabilities.items()})
+        await db.execute(
+            """
+            UPDATE account_memberships
+            SET manage_videos = ?, manage_matches = ?, manage_tags = ?,
+                manage_account_settings = ?, manage_members = ?, admin = ?
+            WHERE id = ?
+            """,
+            (
+                values["manage_videos"],
+                values["manage_matches"],
+                values["manage_tags"],
+                values["manage_account_settings"],
+                values["manage_members"],
+                values["admin"],
+                created["membership"]["id"],
+            ),
+        )
+        await db.commit()
+        created["membership"] = await account_service.get_membership(db, user_id, created["account"]["id"])
+
+    session = await session_service.create_session(
+        db,
+        user_id=user_id,
+        active_account_id=created["account"]["id"],
+        expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+    )
+    return {"user_id": user_id, "account": created["account"], "membership": created["membership"], "session": session}
+
+
+async def login_test_user(client, db, **kwargs) -> dict:
+    """Create and attach an authenticated test user cookie to the client."""
+    context = await create_test_user_with_account(db, **kwargs)
+    client.cookies.set(AUTH_SESSION_COOKIE, context["session"]["token"], domain="test.local")
+    client.cookies.set(AUTH_SESSION_COOKIE, context["session"]["token"])
+    return context
+
+
+@pytest_asyncio.fixture
+async def auth_context(client, db):
+    """Authenticated admin user context for route tests."""
+    return await login_test_user(client, db)
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def auto_auth_checkpoint3_route_tests(request, client, db):
+    """Keep legacy route tests authenticated while explicit anonymous tests opt out."""
+    if request.node.get_closest_marker("no_auto_auth"):
+        return
+    module_path = str(getattr(request.node, "path", ""))
+    if module_path.endswith(("test_videos.py", "test_tags.py", "test_matches.py", "test_clips.py")):
+        await login_test_user(client, db, email=f"{request.node.name}@example.com")

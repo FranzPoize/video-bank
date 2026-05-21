@@ -14,8 +14,10 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from app.database import get_db
+from app.dependencies import require_active_account
 from app.services import clip_service, tag_service, video_service
-from app.services.file_service import THUMBNAIL_EXT, get_available_space, get_video_path
+from app.services import permission_service
+from app.services.file_service import THUMBNAILS_DIR, THUMBNAIL_EXT, get_available_space, get_video_path
 from app.templates import (
     DEFAULT_LANG,
     LANG_FLAGS,
@@ -43,14 +45,37 @@ def _video_to_card(video: dict) -> dict:
     return {
         **video,
         "has_thumbnail": has_thumbnail,
-        "thumbnail_url": f"/uploads/thumbnails/{thumb_stem}.{THUMBNAIL_EXT}"
+        "thumbnail_url": f"/api/videos/{video['id']}/thumbnail"
         if has_thumbnail
         else None,
     }
 
 
+def _account_context(active: dict) -> dict:
+    """Return template auth/account context for protected pages."""
+    return {
+        "current_user": active["user"],
+        "current_account": active["account"],
+        "membership": active["membership"],
+        "can_manage_videos": bool(active["membership"][permission_service.ADMIN])
+        or bool(active["membership"][permission_service.MANAGE_VIDEOS]),
+    }
+
+
+async def _require_video_manager(db, active: dict) -> None:
+    try:
+        await permission_service.require_capability(
+            db,
+            active["user"]["id"],
+            active["account"]["id"],
+            permission_service.MANAGE_VIDEOS,
+        )
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Capability required")
+
+
 @router.get("/api/space")
-async def space_indicator(request: Request):
+async def space_indicator(request: Request, active=Depends(require_active_account)):
     """Return an HTML fragment showing available disk space in the uploads directory.
 
     This is consumed by the nav bar's hx-get in base.html. Never blocks
@@ -66,6 +91,21 @@ async def space_indicator(request: Request):
             "space": space,
         },
     )
+
+
+@router.get("/api/videos/{video_id}/thumbnail")
+async def video_thumbnail(video_id: int, db=Depends(get_db), active=Depends(require_active_account)):
+    """Return a video's thumbnail for the active account only."""
+    video = await video_service.get_video(db, video_id, account_id=active["account"]["id"])
+    if video is None:
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+
+    thumb_stem = Path(video["filename"]).stem
+    thumb_path = THUMBNAILS_DIR / f"{thumb_stem}.{THUMBNAIL_EXT}"
+    if not thumb_path.exists():
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+
+    return FileResponse(path=str(thumb_path), media_type=f"image/{THUMBNAIL_EXT}")
 
 
 @router.post("/api/lang")
@@ -117,16 +157,18 @@ async def list_videos(
     request: Request,
     tag_id: int | None = None,
     db=Depends(get_db),
+    active=Depends(require_active_account),
 ):
     """Show all videos, optionally filtered by tag_id. HTMX requests get just the grid fragment."""
     i18n = get_i18n(request)
+    account_id = active["account"]["id"]
     if tag_id is not None:
-        videos = await video_service.list_videos_by_tag(db, tag_id)
+        videos = await video_service.list_videos_by_tag(db, tag_id, account_id=account_id)
     else:
-        videos = await video_service.list_videos_with_tags(db)
+        videos = await video_service.list_videos_with_tags(db, account_id=account_id)
 
     enriched = [_video_to_card(v) for v in videos]
-    all_tags = await tag_service.list_all_tags(db)
+    all_tags = await tag_service.list_all_tags(db, account_id=account_id)
 
     is_htmx = request.headers.get("HX-Request") == "true"
     template = "_content.html" if is_htmx else "index.html"
@@ -139,18 +181,19 @@ async def list_videos(
             "videos": enriched,
             "all_tags": all_tags,
             "active_tag_id": tag_id,
+            **_account_context(active),
         },
     )
 
 
 @router.get("/upload")
-async def upload_form(request: Request):
+async def upload_form(request: Request, active=Depends(require_active_account)):
     """Show the upload form."""
     i18n = get_i18n(request)
     return templates.TemplateResponse(
         request,
         "upload.html",
-        {**i18n},
+        {**i18n, **_account_context(active)},
     )
 
 
@@ -161,6 +204,7 @@ async def create_video(
     file: UploadFile = File(...),
     tags: str = Form(""),  # Comma-separated tags
     db=Depends(get_db),
+    active=Depends(require_active_account),
 ):
     """Handle video upload. Redirects to list on success.
 
@@ -168,6 +212,8 @@ async def create_video(
     instead of a redirect (for XHR uploads via upload.js).
     """
     i18n = get_i18n(request)
+    await _require_video_manager(db, active)
+    account_id = active["account"]["id"]
     # Read file content
     content = await file.read()
 
@@ -179,6 +225,7 @@ async def create_video(
             original_name=file.filename or "untitled",
             mime_type=file.content_type or "application/octet-stream",
             file_size=len(content),
+            account_id=account_id,
             tags=tags,
         )
     except ValueError as e:
@@ -190,6 +237,7 @@ async def create_video(
             "upload.html",
             {
                 **i18n,
+                **_account_context(active),
                 "error": str(e),
             },
             status_code=400,
@@ -203,9 +251,9 @@ async def create_video(
 
 
 @router.get("/api/videos/{video_id}/file")
-async def stream_video(video_id: int, db=Depends(get_db)):
+async def stream_video(video_id: int, db=Depends(get_db), active=Depends(require_active_account)):
     """Stream a video file with range request support for seeking."""
-    video = await video_service.get_video(db, video_id)
+    video = await video_service.get_video(db, video_id, account_id=active["account"]["id"])
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
 
@@ -221,10 +269,11 @@ async def stream_video(video_id: int, db=Depends(get_db)):
 
 
 @router.get("/videos/{video_id}")
-async def video_detail(request: Request, video_id: int, db=Depends(get_db)):
+async def video_detail(request: Request, video_id: int, db=Depends(get_db), active=Depends(require_active_account)):
     """Show video detail page with player and tags."""
     i18n = get_i18n(request)
-    video = await video_service.get_video_with_tags(db, video_id)
+    account_id = active["account"]["id"]
+    video = await video_service.get_video_with_tags(db, video_id, account_id=account_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
 
@@ -233,7 +282,7 @@ async def video_detail(request: Request, video_id: int, db=Depends(get_db)):
 
     # Get matches this video belongs to
     from app.services.match_service import get_video_matches
-    video_matches = await get_video_matches(db, video_id)
+    video_matches = await get_video_matches(db, video_id, account_id=account_id)
 
     return templates.TemplateResponse(
         request,
@@ -242,15 +291,16 @@ async def video_detail(request: Request, video_id: int, db=Depends(get_db)):
             **i18n,
             "video": enriched,
             "video_matches": video_matches,
+            **_account_context(active),
         },
     )
 
 
 @router.get("/videos/{video_id}/edit")
-async def edit_video_form(request: Request, video_id: int, db=Depends(get_db)):
+async def edit_video_form(request: Request, video_id: int, db=Depends(get_db), active=Depends(require_active_account)):
     """Show the edit form for a video."""
     i18n = get_i18n(request)
-    video = await video_service.get_video_with_tags(db, video_id)
+    video = await video_service.get_video_with_tags(db, video_id, account_id=active["account"]["id"])
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
 
@@ -261,6 +311,7 @@ async def edit_video_form(request: Request, video_id: int, db=Depends(get_db)):
             **i18n,
             "video": video,
             "tags_str": ", ".join(video.get("tags", [])),
+            **_account_context(active),
         },
     )
 
@@ -272,35 +323,39 @@ async def update_video(
     name: str = Form(...),
     tags: str = Form(""),
     db=Depends(get_db),
+    active=Depends(require_active_account),
 ):
     """Update a video's name and tags."""
-    video = await video_service.get_video(db, video_id)
+    await _require_video_manager(db, active)
+    account_id = active["account"]["id"]
+    video = await video_service.get_video(db, video_id, account_id=account_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
 
-    await video_service.update_video(db, video_id, name)
+    await video_service.update_video(db, video_id, name, account_id=account_id)
 
     # Update tags
     tag_names = [t.strip() for t in tags.split(",") if t.strip()]
-    await tag_service.set_video_tags(db, video_id, tag_names)
+    await tag_service.set_video_tags(db, video_id, tag_names, account_id=account_id)
 
     return RedirectResponse(url=f"/videos/{video_id}", status_code=303)
 
 
 @router.post("/videos/{video_id}/delete")
-async def delete_video(video_id: int, db=Depends(get_db)):
+async def delete_video(video_id: int, db=Depends(get_db), active=Depends(require_active_account)):
     """Delete a video and its files."""
-    deleted = await video_service.delete_video(db, video_id)
+    await _require_video_manager(db, active)
+    deleted = await video_service.delete_video(db, video_id, account_id=active["account"]["id"])
     if not deleted:
         raise HTTPException(status_code=404, detail="Video not found")
     return RedirectResponse(url="/videos", status_code=303)
 
 
 @router.get("/videos/{video_id}/clip")
-async def clip_form(request: Request, video_id: int, db=Depends(get_db)):
+async def clip_form(request: Request, video_id: int, db=Depends(get_db), active=Depends(require_active_account)):
     """Show the clip creator interface for a video."""
     i18n = get_i18n(request)
-    video = await video_service.get_video_with_tags(db, video_id)
+    video = await video_service.get_video_with_tags(db, video_id, account_id=active["account"]["id"])
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
 
@@ -313,6 +368,7 @@ async def clip_form(request: Request, video_id: int, db=Depends(get_db)):
         {
             **i18n,
             "video": enriched,
+            **_account_context(active),
         },
     )
 
@@ -322,8 +378,11 @@ async def create_clip(
     request: Request,
     video_id: int,
     db=Depends(get_db),
+    active=Depends(require_active_account),
 ):
     """Create a clip from a source video. Accepts JSON body with start/end."""
+    await _require_video_manager(db, active)
+    account_id = active["account"]["id"]
     # Parse JSON body
     try:
         body = await request.json()
@@ -349,12 +408,12 @@ async def create_clip(
         )
 
     # Check source video exists (returns 404 instead of 400)
-    source = await video_service.get_video(db, video_id)
+    source = await video_service.get_video(db, video_id, account_id=account_id)
     if source is None:
         raise HTTPException(status_code=404, detail="Source video not found")
 
     try:
-        clip = await clip_service.create_clip(db, video_id, start, end)
+        clip = await clip_service.create_clip(db, video_id, start, end, account_id=account_id)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     except RuntimeError as e:
@@ -368,8 +427,11 @@ async def cut_video(
     request: Request,
     video_id: int,
     db=Depends(get_db),
+    active=Depends(require_active_account),
 ):
     """Remove a segment from a video in-place. Accepts JSON body with start/end."""
+    await _require_video_manager(db, active)
+    account_id = active["account"]["id"]
     try:
         body = await request.json()
     except Exception:
@@ -394,12 +456,12 @@ async def cut_video(
         )
 
     # Check video exists (404 vs 400)
-    video = await video_service.get_video(db, video_id)
+    video = await video_service.get_video(db, video_id, account_id=account_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
 
     try:
-        updated = await clip_service.cut_video(db, video_id, start, end)
+        updated = await clip_service.cut_video(db, video_id, start, end, account_id=account_id)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     except RuntimeError as e:

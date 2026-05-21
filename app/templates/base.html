@@ -41,13 +41,14 @@
 <body class="bg-background text-foreground">
     <nav class="border-b bg-background flex items-center gap-4 px-6 py-3">
         <a href="/" class="text-foreground/80 hover:text-foreground font-semibold no-underline">{{ _("nav.video_bank") }}</a>
+        {% if current_user is defined and current_user %}
         <a href="/videos" class="text-foreground/80 hover:text-foreground font-semibold no-underline">{{ _("nav.videos") }}</a>
         <a href="/upload" class="text-foreground/80 hover:text-foreground font-semibold no-underline">{{ _("nav.upload") }}</a>
         <a href="/settings" class="text-foreground/80 hover:text-foreground font-semibold no-underline">{{ _("nav.settings") }}</a>
-
-        <span id="space-indicator" class="ml-auto" hx-get="/api/space" hx-trigger="load"></span>
+        {% endif %}
 
         {% if current_user is defined and current_user %}
+        <span id="space-indicator" class="ml-auto" hx-get="/api/space" hx-trigger="load"></span>
         <div class="flex items-center gap-2 text-sm text-foreground/80" data-testid="auth-user-indicator">
             {% if current_account is defined and current_account %}
             <span class="font-semibold">{{ current_account.display_name }}</span>
@@ -59,6 +60,7 @@
             <button type="submit" class="uk-btn uk-btn-ghost uk-btn-sm">{{ _("nav.logout") }}</button>
         </form>
         {% else %}
+        <span class="ml-auto" aria-hidden="true"></span>
         <div class="flex items-center gap-2">
             <a href="/login" class="uk-btn uk-btn-ghost uk-btn-sm no-underline">{{ _("nav.login") }}</a>
             <a href="/signup" class="uk-btn uk-btn-primary uk-btn-sm no-underline">{{ _("nav.signup") }}</a>

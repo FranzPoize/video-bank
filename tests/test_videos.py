@@ -5,13 +5,182 @@ Run with: pytest tests/test_videos.py -v
 """
 
 import collections
+from pathlib import Path
 import pytest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 # shutil.disk_usage returns a namedtuple; use same shape for mocks
-from tests.conftest import create_test_video
+from tests.conftest import create_test_video, login_test_user
+from app.services import tag_service, video_service
+from app.services.file_service import THUMBNAILS_DIR, THUMBNAIL_EXT
 
 DiskUsage = collections.namedtuple("DiskUsage", ["total", "used", "free"])
+
+
+class TestCheckpoint3VideoRouteAuth:
+    """Route-level auth, account isolation, and capability checks for videos."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.no_auto_auth
+    async def test_anonymous_video_pages_redirect_to_login(self, client):
+        """Anonymous users are redirected away from protected video pages."""
+        response = await client.get("/videos", follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers["location"] == "/login"
+
+    @pytest.mark.asyncio
+    @pytest.mark.no_auto_auth
+    async def test_anonymous_direct_upload_video_path_is_not_public(self, client):
+        """The uploads directory is not mounted as public static files."""
+        response = await client.get("/uploads/videos/anything.mp4")
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    @pytest.mark.no_auto_auth
+    async def test_anonymous_space_indicator_redirects_to_login(self, client):
+        """The disk space fragment requires an authenticated active account."""
+        response = await client.get("/api/space", follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers["location"] == "/login"
+
+    @pytest.mark.asyncio
+    @pytest.mark.no_auto_auth
+    async def test_anonymous_htmx_asset_remains_public(self, client):
+        """The vendored HTMX asset remains publicly reachable without auth."""
+        response = await client.get("/static/js/htmx.min.js", follow_redirects=False)
+        assert response.status_code == 200
+        assert "javascript" in response.headers["content-type"]
+
+    @pytest.mark.asyncio
+    async def test_cross_account_video_access_returns_not_found(self, client, db):
+        """A user cannot read or stream another account's video."""
+        video_id = await create_test_video(client, "Private Video")
+        client.cookies.clear()
+        await login_test_user(client, db, email="other-video@example.com")
+
+        detail = await client.get(f"/videos/{video_id}")
+        stream = await client.get(f"/api/videos/{video_id}/file")
+
+        assert detail.status_code == 404
+        assert stream.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_thumbnail_access_is_account_scoped(self, client, db):
+        """Authenticated users can read their own thumbnail but not another account's."""
+        video_id = await create_test_video(client, "Thumbnail Private")
+        video = await (await db.execute("SELECT * FROM videos WHERE id = ?", (video_id,))).fetchone()
+        thumb_path = THUMBNAILS_DIR / f"{Path(video['filename']).stem}.{THUMBNAIL_EXT}"
+        thumb_path.parent.mkdir(parents=True, exist_ok=True)
+        thumb_path.write_bytes(b"thumbnail-bytes")
+
+        try:
+            own = await client.get(f"/api/videos/{video_id}/thumbnail")
+            assert own.status_code == 200
+            assert own.content == b"thumbnail-bytes"
+
+            client.cookies.clear()
+            await login_test_user(client, db, email="other-thumbnail@example.com")
+            cross_account = await client.get(f"/api/videos/{video_id}/thumbnail")
+            assert cross_account.status_code == 404
+        finally:
+            if thumb_path.exists():
+                thumb_path.unlink()
+
+    @pytest.mark.asyncio
+    async def test_user_without_manage_videos_cannot_upload(self, client, db):
+        """Video mutations require manage_videos or admin."""
+        client.cookies.clear()
+        await login_test_user(
+            client,
+            db,
+            email="viewer-video@example.com",
+            capabilities={"manage_videos": False, "admin": False},
+        )
+
+        response = await client.post(
+            "/api/videos",
+            data={"name": "Blocked"},
+            files={"file": ("blocked.mp4", b"content", "video/mp4")},
+        )
+
+        assert response.status_code == 403
+
+
+async def _create_account(db, name: str) -> int:
+    """Create a minimal account row for account-scoped service tests."""
+    cursor = await db.execute("INSERT INTO accounts (display_name) VALUES (?)", (name,))
+    await db.commit()
+    return cursor.lastrowid
+
+
+async def _create_service_video(db, account_id: int, name: str, tags: str = "") -> dict:
+    """Create a video through the service without touching real storage."""
+    with patch("app.services.video_service.file_service.save_upload", AsyncMock(return_value=f"{name}.mp4")), \
+         patch("app.services.video_service.file_service.generate_thumbnail", AsyncMock(return_value=False)):
+        return await video_service.create_video(
+            db,
+            name=name,
+            file_content=b"video",
+            original_name=f"{name}.mp4",
+            mime_type="video/mp4",
+            file_size=5,
+            account_id=account_id,
+            tags=tags,
+        )
+
+
+class TestVideoServiceAccountIsolation:
+    """Service-level tests for account-scoped video operations."""
+
+    @pytest.mark.asyncio
+    async def test_reads_only_return_videos_for_account(self, db):
+        """List/get/get-with-tags filter videos and tags by account_id."""
+        account_one = await _create_account(db, "Team One")
+        account_two = await _create_account(db, "Team Two")
+        one_video = await _create_service_video(db, account_one, "One", "shared")
+        two_video = await _create_service_video(db, account_two, "Two", "shared")
+
+        assert await video_service.get_video(db, one_video["id"], account_id=account_two) is None
+        assert await video_service.get_video_with_tags(db, two_video["id"], account_id=account_one) is None
+
+        listed = await video_service.list_videos_with_tags(db, account_id=account_one)
+        assert [video["id"] for video in listed] == [one_video["id"]]
+        assert listed[0]["tags"] == ["shared"]
+
+    @pytest.mark.asyncio
+    async def test_update_and_delete_cross_account_behave_not_found(self, db):
+        """Updating/deleting with another account does not reveal or mutate the target."""
+        account_one = await _create_account(db, "Team One")
+        account_two = await _create_account(db, "Team Two")
+        video = await _create_service_video(db, account_one, "Private")
+
+        updated = await video_service.update_video(
+            db,
+            video["id"],
+            "Leaked",
+            account_id=account_two,
+        )
+        assert updated is None
+        assert await video_service.delete_video(db, video["id"], account_id=account_two) is False
+
+        still_private = await video_service.get_video(db, video["id"], account_id=account_one)
+        assert still_private["name"] == "Private"
+
+    @pytest.mark.asyncio
+    async def test_list_by_tag_is_account_scoped(self, db):
+        """Filtering with a tag id only returns videos in the requested account."""
+        account_one = await _create_account(db, "Team One")
+        account_two = await _create_account(db, "Team Two")
+        one_video = await _create_service_video(db, account_one, "One", "alpha")
+        two_video = await _create_service_video(db, account_two, "Two", "alpha")
+        one_tag = await tag_service.get_or_create_tag(db, "alpha", account_id=account_one)
+
+        listed = await video_service.list_videos_by_tag(db, one_tag, account_id=account_one)
+        assert [video["id"] for video in listed] == [one_video["id"]]
+
+        cross_account = await video_service.list_videos_by_tag(db, one_tag, account_id=account_two)
+        assert cross_account == []
+        assert two_video["id"] not in [video["id"] for video in listed]
 
 
 class TestVideoList:

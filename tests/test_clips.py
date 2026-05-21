@@ -9,10 +9,35 @@ source existence, tag copying) is tested directly.
 """
 
 import json
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from tests.conftest import mock_ffmpeg, create_test_video
+from app.services import clip_service, tag_service, video_service
+
+
+async def _create_account(db, name: str) -> int:
+    """Create a minimal account row for account-scoped clip service tests."""
+    cursor = await db.execute("INSERT INTO accounts (display_name) VALUES (?)", (name,))
+    await db.commit()
+    return cursor.lastrowid
+
+
+async def _create_service_video(db, account_id: int, name: str, tags: str = "") -> dict:
+    """Create a video through the service without touching real storage."""
+    with patch("app.services.video_service.file_service.save_upload", AsyncMock(return_value=f"{name}.mp4")), \
+         patch("app.services.video_service.file_service.generate_thumbnail", AsyncMock(return_value=False)):
+        return await video_service.create_video(
+            db,
+            name=name,
+            file_content=b"video",
+            original_name=f"{name}.mp4",
+            mime_type="video/mp4",
+            file_size=5,
+            account_id=account_id,
+            tags=tags,
+        )
 
 
 class TestClipServiceValidation:
@@ -32,6 +57,61 @@ class TestClipServiceValidation:
         data = response.json()
         assert "Start must be before end" in data["error"]
 
+
+class TestClipServiceAccountIsolation:
+    """Service-level tests for account-scoped clip and cut operations."""
+
+    @pytest.mark.asyncio
+    async def test_clip_cross_account_source_behaves_not_found(self, db):
+        """Creating a clip from another account's source raises safe not-found ValueError."""
+        account_one = await _create_account(db, "Team One")
+        account_two = await _create_account(db, "Team Two")
+        source = await _create_service_video(db, account_one, "Source", "alpha")
+
+        with pytest.raises(ValueError, match="Source video with id"):
+            await clip_service.create_clip(
+                db,
+                source["id"],
+                1,
+                5,
+                account_id=account_two,
+            )
+
+    @pytest.mark.asyncio
+    async def test_clip_inherits_source_account_and_tags(self, db):
+        """Clips are created in the source account and copy account-scoped tags."""
+        account_id = await _create_account(db, "Team")
+        source = await _create_service_video(db, account_id, "Source", "alpha, beta")
+
+        with mock_ffmpeg(source_filename="Source"):
+            clip = await clip_service.create_clip(
+                db,
+                source["id"],
+                1,
+                5,
+                account_id=account_id,
+            )
+
+        assert clip["account_id"] == account_id
+        assert clip["source_video_id"] == source["id"]
+        assert await tag_service.get_video_tags(db, clip["id"], account_id=account_id) == ["alpha", "beta"]
+        assert await video_service.get_video(db, clip["id"], account_id=account_id + 1) is None
+
+    @pytest.mark.asyncio
+    async def test_cut_cross_account_video_behaves_not_found(self, db):
+        """Cutting another account's video raises safe not-found ValueError."""
+        account_one = await _create_account(db, "Team One")
+        account_two = await _create_account(db, "Team Two")
+        source = await _create_service_video(db, account_one, "Source")
+
+        with pytest.raises(ValueError, match="Video with id"):
+            await clip_service.cut_video(
+                db,
+                source["id"],
+                1,
+                5,
+                account_id=account_two,
+            )
     @pytest.mark.asyncio
     async def test_clip_minimum_duration(self, client, db):
         """POST with duration < 1s returns 400."""
