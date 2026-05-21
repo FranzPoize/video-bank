@@ -12,7 +12,7 @@ from app.dependencies import (
     SESSION_COOKIE_SECURE,
     get_current_user_optional,
 )
-from app.services import account_service, auth_service, email_service, session_service
+from app.services import account_service, auth_service, email_service, invitation_service, session_service
 from app.templates import get_i18n, templates
 
 
@@ -27,9 +27,12 @@ def _current_user_context(current_session: dict | None = None) -> dict:
     }
 
 
-def _verification_url(request: Request, token: str) -> str:
+def _verification_url(request: Request, token: str, invitation_token: str | None = None) -> str:
     """Build an absolute email verification URL for outgoing emails."""
-    return str(request.url_for("verify_email")) + f"?token={token}"
+    url = str(request.url_for("verify_email")) + f"?token={token}"
+    if invitation_token:
+        url += f"&invitation_token={invitation_token}"
+    return url
 
 
 @router.get("/signup")
@@ -39,7 +42,12 @@ async def signup_form(request: Request, current_session=Depends(get_current_user
     return templates.TemplateResponse(
         request,
         "signup.html",
-        {**i18n, **_current_user_context(current_session), "email": ""},
+        {
+            **i18n,
+            **_current_user_context(current_session),
+            "email": "",
+            "invitation_token": request.query_params.get("invitation_token", ""),
+        },
     )
 
 
@@ -48,6 +56,7 @@ async def signup(
     request: Request,
     email: str = Form(...),
     password: str = Form(...),
+    invitation_token: str = Form(""),
     db=Depends(get_db),
 ):
     """Create an unverified user, email a verification token, and show confirmation."""
@@ -56,7 +65,19 @@ async def signup(
     try:
         user = await auth_service.create_unverified_user(db, email, password)
         token = await auth_service.create_email_verification_token(db, user["id"])
-        email_service.send_verification_email(user["email"], _verification_url(request, token))
+        if invitation_token:
+            invitation = await invitation_service.get_pending_invitation_by_token(db, invitation_token)
+            if user["normalized_email"] != invitation["invited_normalized_email"]:
+                raise ValueError("Invitation email mismatch")
+        verification_url = _verification_url(request, token, invitation_token or None)
+        if invitation_token:
+            email_service.send_verification_email(
+                user["email"],
+                verification_url,
+                invitation_url=str(request.url_for("accept_invitation_form")) + f"?token={invitation_token}",
+            )
+        else:
+            email_service.send_verification_email(user["email"], verification_url)
     except ValueError:
         return templates.TemplateResponse(
             request,
@@ -65,6 +86,7 @@ async def signup(
                 **i18n,
                 **_current_user_context(),
                 "email": email,
+                "invitation_token": invitation_token,
                 "error": _("auth.signup.error"),
             },
             status_code=400,
@@ -78,6 +100,7 @@ async def signup(
             **_current_user_context(),
             "status": "sent",
             "email": user["email"],
+            "invitation_token": invitation_token,
         },
     )
 
@@ -86,6 +109,7 @@ async def signup(
 async def verify_email(
     request: Request,
     token: str = "",
+    invitation_token: str = "",
     db=Depends(get_db),
     current_session=Depends(get_current_user_optional),
 ):
@@ -95,7 +119,12 @@ async def verify_email(
         status = "failure"
     else:
         try:
-            await auth_service.verify_email_token(db, token, create_account=True)
+            await auth_service.verify_email_token(
+                db,
+                token,
+                create_account=True,
+                invitation_token=invitation_token or None,
+            )
             status = "success"
         except ValueError:
             status = "failure"
@@ -103,7 +132,12 @@ async def verify_email(
     return templates.TemplateResponse(
         request,
         "verify_email.html",
-        {**i18n, **_current_user_context(current_session), "status": status},
+        {
+            **i18n,
+            **_current_user_context(current_session),
+            "status": status,
+            "invitation_token": invitation_token,
+        },
         status_code=200,
     )
 

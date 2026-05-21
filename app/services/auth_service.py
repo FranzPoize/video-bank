@@ -127,8 +127,9 @@ async def verify_email_token(
     *,
     create_account: bool = False,
     account_display_name: str | None = None,
+    invitation_token: str | None = None,
 ) -> dict:
-    """Verify an email token once and optionally create the signup account."""
+    """Verify an email token once and optionally create/activate signup context."""
     token_hash = security_service.hash_token(token)
     cursor = await db.execute(
         """SELECT evt.*, u.email AS user_email
@@ -158,7 +159,9 @@ async def verify_email_token(
             (now_text, token_row["id"]),
         )
 
-        if create_account:
+        if invitation_token:
+            await _accept_signup_invitation(db, token_row["user_id"], invitation_token)
+        elif create_account:
             await _create_signup_account(
                 db,
                 token_row["user_id"],
@@ -174,6 +177,16 @@ async def verify_email_token(
     if user is None:
         raise RuntimeError("Verified user could not be loaded")
     return user
+
+
+async def _accept_signup_invitation(
+    db: aiosqlite.Connection,
+    user_id: int,
+    invitation_token: str,
+) -> None:
+    """Activate a pending invitation after a signup email is verified."""
+    invitation_service = import_module("app.services.invitation_service")
+    await invitation_service.accept_invitation(db, invitation_token, user_id)
 
 
 def _default_account_display_name(email: str) -> str:

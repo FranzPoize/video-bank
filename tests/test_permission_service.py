@@ -86,6 +86,17 @@ class TestPermissionConstants:
             capability: False for capability in permission_service.ALL_CAPABILITIES
         }
 
+    def test_persisted_capability_values_expands_admin(self):
+        """Admin rights persist all capability flags as enabled for edit screens."""
+        values = permission_service.persisted_capability_values({"admin": True, "manage_videos": False})
+
+        assert values == {capability: 1 for capability in permission_service.ALL_CAPABILITIES}
+
+    def test_persisted_capability_values_rejects_unknown_capability(self):
+        """Unknown right names are rejected before SQL writes happen."""
+        with pytest.raises(ValueError, match="Unknown capability"):
+            permission_service.persisted_capability_values({"delete_everything": True})
+
 
 class TestMembershipChecks:
     async def test_get_active_membership_returns_member(self, db):

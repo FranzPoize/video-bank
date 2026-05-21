@@ -24,9 +24,15 @@
                     <tr>
                         <th>{{ _("account.members.email") }}</th>
                         <th>{{ _("account.members.capabilities") }}</th>
+                        {% if can_manage_members %}<th>{{ _("account.members.actions") }}</th>{% endif %}
                     </tr>
                 </thead>
                 <tbody>
+                    {% if error %}
+                    <tr>
+                        <td colspan="3"><div class="uk-alert uk-alert-danger">{{ error }}</div></td>
+                    </tr>
+                    {% endif %}
                     {% for member in members %}
                     <tr>
                         <td>{{ member.email }}</td>
@@ -43,6 +49,16 @@
                                 {% endif %}
                             </div>
                         </td>
+                        {% if can_manage_members %}
+                        <td>
+                            <div class="flex flex-wrap gap-2">
+                                <a class="uk-btn uk-btn-sm uk-btn-secondary no-underline" data-testid="edit-member-rights" href="/account/members/{{ member.membership_id }}/rights">{{ _("account.members.edit_rights") }}</a>
+                                <form method="post" action="/account/members/{{ member.membership_id }}/remove">
+                                    <button class="uk-btn uk-btn-sm uk-btn-danger" data-testid="remove-member" type="submit">{{ _("account.members.remove") }}</button>
+                                </form>
+                            </div>
+                        </td>
+                        {% endif %}
                     </tr>
                     {% endfor %}
                 </tbody>

@@ -97,15 +97,23 @@ def send_verification_email(
     recipient: str,
     verification_url: str,
     *,
+    invitation_url: str | None = None,
     delivery_mode: str | None = None,
 ) -> dict:
     """Send an email verification message. Returns the send result."""
     url = _validate_required_text(verification_url, "Verification URL")
+    invitation_text = ""
+    if invitation_url is not None:
+        invitation_text = (
+            "\n\nAfter verification, your pending account invitation will be accepted."
+            f"\nInvitation link: {_validate_required_text(invitation_url, 'Invitation URL')}"
+        )
     result = send_email(
         recipient,
         "Verify your Video Bank email",
         "Welcome to Video Bank. Verify your email by opening this link:\n\n"
         f"{url}\n\n"
+        f"{invitation_text}\n\n"
         "If you did not request this, you can ignore this email.",
         delivery_mode=delivery_mode,
     )

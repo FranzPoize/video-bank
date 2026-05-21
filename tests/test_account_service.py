@@ -241,3 +241,132 @@ async def test_list_members_for_account_returns_member_summary_and_capabilities(
         "manage_members": False,
         "admin": False,
     }
+
+
+@pytest.mark.asyncio
+async def test_update_member_capabilities_updates_rights_for_planned_rights_route(db):
+    """POST /account/members/{membership_id}/rights can save selected capabilities."""
+    admin_id = await _create_user(db, "rights-admin@example.com")
+    member_id = await _create_user(db, "rights-member@example.com")
+    created = await account_service.create_account_with_admin_membership(db, admin_id, "Rights")
+    membership = await account_service.create_or_reactivate_membership(
+        db,
+        member_id,
+        created["account"]["id"],
+        {"manage_videos": True},
+    )
+
+    updated = await account_service.update_member_capabilities(
+        db,
+        membership["id"],
+        {
+            "manage_matches": True,
+            "manage_tags": True,
+            "manage_members": True,
+            "admin": False,
+        },
+    )
+
+    assert updated is not None
+    assert updated["membership_id"] == membership["id"]
+    assert updated["capabilities"] == {
+        "manage_videos": False,
+        "manage_matches": True,
+        "manage_tags": True,
+        "manage_account_settings": False,
+        "manage_members": True,
+        "admin": False,
+    }
+
+
+@pytest.mark.asyncio
+async def test_update_member_capabilities_rejects_demoting_only_admin(db):
+    """Rights updates preserve last-admin protection."""
+    admin_id = await _create_user(db, "only-admin-rights@example.com")
+    created = await account_service.create_account_with_admin_membership(db, admin_id, "Only Admin")
+
+    with pytest.raises(ValueError, match="Cannot demote the only administrator"):
+        await account_service.update_member_capabilities(
+            db,
+            created["membership"]["id"],
+            {"admin": False, "manage_members": True},
+        )
+
+    still_admin = await account_service.get_membership_by_id(db, created["membership"]["id"])
+    assert still_admin["admin"] == 1
+
+
+@pytest.mark.asyncio
+async def test_remove_member_revokes_membership_for_planned_remove_route(db):
+    """POST /account/members/{membership_id}/remove revokes non-last-admin members."""
+    admin_id = await _create_user(db, "remove-admin@example.com")
+    member_id = await _create_user(db, "remove-member@example.com")
+    created = await account_service.create_account_with_admin_membership(db, admin_id, "Remove")
+    membership = await account_service.create_or_reactivate_membership(
+        db,
+        member_id,
+        created["account"]["id"],
+        {"manage_videos": True},
+    )
+
+    removed = await account_service.remove_member(db, membership["id"])
+
+    assert removed is True
+    assert await account_service.get_membership(db, member_id, created["account"]["id"]) is None
+    revoked = await account_service.get_membership(db, member_id, created["account"]["id"], active_only=False)
+    assert revoked["is_active"] == 0
+    assert revoked["revoked_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_remove_member_rejects_removing_only_admin(db):
+    """Member removal preserves last-admin protection."""
+    admin_id = await _create_user(db, "only-admin-remove@example.com")
+    created = await account_service.create_account_with_admin_membership(db, admin_id, "Only Remove")
+
+    with pytest.raises(ValueError, match="Cannot remove the only administrator"):
+        await account_service.remove_member(db, created["membership"]["id"])
+
+    assert await account_service.get_membership_by_id(db, created["membership"]["id"], active_only=True) is not None
+
+
+@pytest.mark.asyncio
+async def test_activate_membership_from_invitation_reactivates_revoked_membership(db):
+    """Invitation acceptance restores a removed member with invitation capabilities."""
+    admin_id = await _create_user(db, "invite-admin@example.com")
+    member_id = await _create_user(db, "invited-member@example.com")
+    created = await account_service.create_account_with_admin_membership(db, admin_id, "Invite")
+    membership = await account_service.create_or_reactivate_membership(
+        db,
+        member_id,
+        created["account"]["id"],
+        {"manage_videos": True},
+    )
+    await account_service.remove_member(db, membership["id"])
+    cursor = await db.execute(
+        """
+        INSERT INTO invitations (
+            account_id, invited_email, invited_normalized_email, inviter_user_id,
+            manage_videos, manage_matches, manage_tags, manage_account_settings,
+            manage_members, admin, token_hash, expires_at
+        ) VALUES (?, ?, ?, ?, 0, 1, 1, 0, 0, 0, ?, datetime('now', '+1 day'))
+        """,
+        (
+            created["account"]["id"],
+            "invited-member@example.com",
+            "invited-member@example.com",
+            admin_id,
+            "token-hash-reactivate",
+        ),
+    )
+    await db.commit()
+    invitation_row = await (await db.execute("SELECT * FROM invitations WHERE id = ?", (cursor.lastrowid,))).fetchone()
+
+    reactivated = await account_service.activate_membership_from_invitation(db, member_id, invitation_row)
+
+    assert reactivated["id"] == membership["id"]
+    assert reactivated["is_active"] == 1
+    assert reactivated["revoked_at"] is None
+    assert reactivated["manage_videos"] == 0
+    assert reactivated["manage_matches"] == 1
+    assert reactivated["manage_tags"] == 1

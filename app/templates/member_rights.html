@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}{{ _("account.members.rights_title") }} — {{ _("nav.video_bank") }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+    <div class="flex items-center justify-between gap-4">
+        <div>
+            <h1 class="uk-h2 mb-2">{{ _("account.members.rights_title") }}</h1>
+            <p class="text-muted-foreground">{{ target_member.email }} — {{ current_account.display_name }}</p>
+        </div>
+        <a href="/account/members" class="uk-btn uk-btn-ghost no-underline">{{ _("account.members.title") }}</a>
+    </div>
+
+    {% if error %}
+    <div class="uk-alert uk-alert-danger">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/account/members/{{ target_member.membership_id }}/rights" class="uk-card uk-card-body space-y-4" data-testid="member-rights-form">
+        <p class="text-muted-foreground">{{ _("account.members.rights_intro") }}</p>
+
+        {% for capability in ["admin", "manage_account_settings", "manage_members", "manage_videos", "manage_matches", "manage_tags"] %}
+        <label class="flex items-center gap-3">
+            <input class="uk-checkbox" type="checkbox" name="{{ capability }}" value="on" {% if target_member.capabilities[capability] %}checked{% endif %}>
+            <span>{{ _("capability." ~ capability) }}</span>
+        </label>
+        {% endfor %}
+
+        <div class="flex gap-3 pt-4">
+            <button class="uk-btn uk-btn-primary" type="submit">{{ _("account.members.save_rights") }}</button>
+            <a class="uk-btn uk-btn-ghost no-underline" href="/account/members">{{ _("btn.cancel") }}</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

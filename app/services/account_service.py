@@ -7,6 +7,8 @@ simple to test with the in-memory migration v6 schema.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import aiosqlite
 
 from app.services import permission_service
@@ -338,6 +340,185 @@ async def get_member_summary(
     )
     row = await cursor.fetchone()
     return _member_summary(row) if row else None
+
+
+async def get_member_summary_by_membership_id(
+    db: aiosqlite.Connection,
+    membership_id: int,
+    *,
+    active_only: bool = True,
+) -> dict | None:
+    """Return a member summary by membership id, or None when not found."""
+    active_clause = "AND am.is_active = 1 AND am.revoked_at IS NULL" if active_only else ""
+    cursor = await db.execute(
+        f"""
+        SELECT
+            am.*,
+            u.email,
+            u.normalized_email,
+            u.is_email_verified
+        FROM account_memberships am
+        JOIN users u ON u.id = am.user_id
+        WHERE am.id = ?
+          {active_clause}
+        """,
+        (membership_id,),
+    )
+    row = await cursor.fetchone()
+    return _member_summary(row) if row else None
+
+
+async def update_member_capabilities(
+    db: aiosqlite.Connection,
+    membership_id: int,
+    capabilities: Mapping[str, object],
+) -> dict | None:
+    """Update an active membership's capabilities and return its member summary.
+
+    Raises ValueError when the update would demote the account's only admin or
+    when unknown capability names are supplied.
+    """
+    membership = await get_membership_by_id(db, membership_id, active_only=True)
+    if membership is None:
+        return None
+
+    await permission_service.ensure_membership_can_be_updated(db, membership_id, capabilities)
+    values = permission_service.persisted_capability_values(capabilities)
+    cursor = await db.execute(
+        """
+        UPDATE account_memberships
+        SET manage_videos = ?,
+            manage_matches = ?,
+            manage_tags = ?,
+            manage_account_settings = ?,
+            manage_members = ?,
+            admin = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND is_active = 1
+          AND revoked_at IS NULL
+        """,
+        (
+            values[permission_service.CAPABILITY_MANAGE_VIDEOS],
+            values[permission_service.CAPABILITY_MANAGE_MATCHES],
+            values[permission_service.CAPABILITY_MANAGE_TAGS],
+            values[permission_service.CAPABILITY_MANAGE_ACCOUNT_SETTINGS],
+            values[permission_service.CAPABILITY_MANAGE_MEMBERS],
+            values[permission_service.CAPABILITY_ADMIN],
+            membership_id,
+        ),
+    )
+    await db.commit()
+    if cursor.rowcount == 0:
+        return None
+    return await get_member_summary_by_membership_id(db, membership_id)
+
+
+async def remove_member(db: aiosqlite.Connection, membership_id: int) -> bool:
+    """Revoke an active membership unless it is the account's only admin."""
+    membership = await get_membership_by_id(db, membership_id, active_only=True)
+    if membership is None:
+        return False
+
+    await permission_service.ensure_membership_can_be_removed(db, membership_id)
+    cursor = await db.execute(
+        """
+        UPDATE account_memberships
+        SET is_active = 0,
+            revoked_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND is_active = 1
+          AND revoked_at IS NULL
+        """,
+        (membership_id,),
+    )
+    await db.commit()
+    return cursor.rowcount > 0
+
+
+async def create_or_reactivate_membership(
+    db: aiosqlite.Connection,
+    user_id: int,
+    account_id: int,
+    capabilities: Mapping[str, object],
+) -> dict:
+    """Create, update, or reactivate a user's account membership.
+
+    Invitation acceptance uses this helper so an invited user who was removed can
+    be restored with the invitation's selected capabilities without violating the
+    unique user/account membership constraint.
+    """
+    values = permission_service.persisted_capability_values(capabilities)
+    existing = await get_membership(db, user_id, account_id, active_only=False)
+    if existing is None:
+        cursor = await db.execute(
+            """
+            INSERT INTO account_memberships (
+                user_id, account_id, manage_videos, manage_matches, manage_tags,
+                manage_account_settings, manage_members, admin, is_active
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+            """,
+            (
+                user_id,
+                account_id,
+                values[permission_service.CAPABILITY_MANAGE_VIDEOS],
+                values[permission_service.CAPABILITY_MANAGE_MATCHES],
+                values[permission_service.CAPABILITY_MANAGE_TAGS],
+                values[permission_service.CAPABILITY_MANAGE_ACCOUNT_SETTINGS],
+                values[permission_service.CAPABILITY_MANAGE_MEMBERS],
+                values[permission_service.CAPABILITY_ADMIN],
+            ),
+        )
+        await db.commit()
+        membership_id = cursor.lastrowid
+    else:
+        await db.execute(
+            """
+            UPDATE account_memberships
+            SET manage_videos = ?,
+                manage_matches = ?,
+                manage_tags = ?,
+                manage_account_settings = ?,
+                manage_members = ?,
+                admin = ?,
+                is_active = 1,
+                revoked_at = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                values[permission_service.CAPABILITY_MANAGE_VIDEOS],
+                values[permission_service.CAPABILITY_MANAGE_MATCHES],
+                values[permission_service.CAPABILITY_MANAGE_TAGS],
+                values[permission_service.CAPABILITY_MANAGE_ACCOUNT_SETTINGS],
+                values[permission_service.CAPABILITY_MANAGE_MEMBERS],
+                values[permission_service.CAPABILITY_ADMIN],
+                existing["id"],
+            ),
+        )
+        await db.commit()
+        membership_id = existing["id"]
+
+    membership = await get_membership_by_id(db, membership_id, active_only=True)
+    if membership is None:  # pragma: no cover - defensive database boundary
+        raise RuntimeError("Activated membership could not be loaded")
+    return membership
+
+
+async def activate_membership_from_invitation(
+    db: aiosqlite.Connection,
+    user_id: int,
+    invitation: Mapping[str, object],
+) -> dict:
+    """Create or reactivate membership using capabilities from an invitation row."""
+    capabilities = {capability: invitation[capability] for capability in permission_service.ALL_CAPABILITIES}
+    return await create_or_reactivate_membership(
+        db,
+        user_id,
+        int(invitation["account_id"]),
+        capabilities,
+    )
 
 
 async def set_session_active_account(

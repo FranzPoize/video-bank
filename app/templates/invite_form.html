@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}{{ _("invitation.new.title") }} — {{ _("nav.video_bank") }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+    <div class="flex items-center justify-between gap-4">
+        <div>
+            <h1 class="uk-h2 mb-2">{{ _("invitation.new.title") }}</h1>
+            <p class="text-muted-foreground">{{ current_account.display_name }}</p>
+        </div>
+        <a href="/account/members" class="uk-btn uk-btn-ghost no-underline">{{ _("account.members.title") }}</a>
+    </div>
+
+    {% if sent %}
+    <div class="uk-alert uk-alert-success" data-uk-alert>
+        <p>{{ _("invitation.new.sent") }}</p>
+    </div>
+    {% endif %}
+    {% if error == "invalid" %}
+    <div class="uk-alert uk-alert-destructive" data-uk-alert>
+        <p>{{ _("invitation.new.error.invalid") }}</p>
+    </div>
+    {% endif %}
+    {% if error == "email_failed" %}
+    <div class="uk-alert uk-alert-destructive" data-uk-alert>
+        <p>{{ _("invitation.new.error.email_failed") }}</p>
+    </div>
+    {% endif %}
+
+    <div class="uk-card uk-card-body">
+        <form method="post" action="/account/invitations" class="space-y-5">
+            <div>
+                <label for="email" class="uk-form-label">{{ _("auth.email") }}</label>
+                <input id="email" name="email" type="email" class="uk-input" value="{{ email }}" required>
+            </div>
+
+            <fieldset class="space-y-3">
+                <legend class="font-semibold">{{ _("account.members.capabilities") }}</legend>
+                {% for capability in capabilities %}
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" name="capabilities" value="{{ capability }}" {% if selected_capabilities.get(capability) %}checked{% endif %}>
+                    <span>{{ _("capability." ~ capability) }}</span>
+                </label>
+                {% endfor %}
+            </fieldset>
+
+            <button type="submit" class="uk-btn uk-btn-primary">{{ _("invitation.new.submit") }}</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

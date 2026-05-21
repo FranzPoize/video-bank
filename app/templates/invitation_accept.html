@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ _("invitation.accept.title") }} — {{ _("nav.video_bank") }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <h1 class="uk-h2">{{ _("invitation.accept.title") }}</h1>
+
+    {% if status == "ready" %}
+    <div class="uk-card uk-card-body space-y-4">
+        <p>{{ _("invitation.accept.intro") }}</p>
+        <p class="font-semibold">{{ invitation.account_display_name }}</p>
+        <p class="text-muted-foreground">{{ invitation.invited_email }}</p>
+        <form method="post" action="/invitations/accept">
+            <input type="hidden" name="token" value="{{ token }}">
+            <button type="submit" class="uk-btn uk-btn-primary">{{ _("invitation.accept.submit") }}</button>
+        </form>
+    </div>
+    {% else %}
+    <div class="uk-alert uk-alert-destructive" data-uk-alert>
+        <p>{{ _("invitation.result.invalid") }}</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

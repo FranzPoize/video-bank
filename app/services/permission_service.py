@@ -106,6 +106,18 @@ def capabilities_from_membership(membership: Mapping[str, Any]) -> dict[str, boo
     return {capability: bool(membership[capability]) for capability in ALL_CAPABILITIES}
 
 
+def persisted_capability_values(capabilities: Mapping[str, Any] | None = None) -> dict[str, int]:
+    """Return normalized integer values suitable for membership persistence.
+
+    Admin memberships persist all capabilities as enabled so list/edit screens show
+    the same rights that authorization checks grant.
+    """
+    normalized = normalize_capabilities(capabilities)
+    if normalized[CAPABILITY_ADMIN]:
+        normalized = {capability: True for capability in ALL_CAPABILITIES}
+    return {capability: 1 if enabled else 0 for capability, enabled in normalized.items()}
+
+
 async def get_active_membership(db, user_id: int, account_id: int):
     """Return the active membership row for a user/account pair, or ``None``."""
     cursor = await db.execute(
