@@ -18,6 +18,7 @@ rules:
   - Max upload size: 2GB (configurable via MAX_UPLOAD_SIZE)
   - No CI pipeline (known limitation)
   - No .env file support — environment variables set in systemd service file or shell
+  - Email/public URL deployment examples must use placeholders only; never document real credentials
   - HTMX loaded from CDN (unpkg.com) — no bundling, no npm
 
 examples:
@@ -36,6 +37,11 @@ examples:
       Environment="DATABASE_PATH=/home/ubuntu/video-bank/data/video_bank.db"
       Environment="ALLOWED_EXTENSIONS=mp4,webm,mov"
       Environment="LOG_DIR=/opt/video-bank/logs"
+      # Placeholder email/public URL configuration; replace with deployment-specific values.
+      # Environment="EMAIL_DELIVERY_MODE=smtp"
+      # Environment="EMAIL_ACCOUNT=your-gmail-address@example.com"
+      # Environment="EMAIL_PASSWORD=your-gmail-app-password"
+      # Environment="PUBLIC_BASE_URL=https://your-domain.example"
       ExecStartPre=mkdir -p /opt/video-bank/logs
       ExecStartPre=chown ubuntu:ubuntu /opt/video-bank/logs
       ExecStart=/home/ubuntu/video-bank/venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 4322
@@ -95,6 +101,7 @@ known_limitations:
   - "No Docker image — bare-metal systemd deployment only"
   - "No CI/CD pipeline — manual deploy via git pull + systemctl restart"
   - "No .env file support — environment vars set in systemd unit"
+  - "Email/public URL deployment examples are placeholders only; set real values in systemd or shell"
   - "HTMX from unpkg.com CDN — no fallback if CDN is down"
   - "All CSS inline in base.html — no external CSS file"
 
@@ -104,3 +111,6 @@ anti_examples:
 
   - description: "Do NOT use npm/webpack/bundlers — HTMX from CDN, vanilla JS"
     snippet: 'npm install htmx  # BAD — HTMX is loaded from unpkg.com CDN'
+
+  - description: "Do NOT commit real email credentials — document placeholders only"
+    snippet: 'Environment="EMAIL_PASSWORD=actual-app-password"  # BAD — use a placeholder in docs'

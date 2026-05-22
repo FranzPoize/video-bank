@@ -42,6 +42,34 @@ async def test_admin_can_create_invitation(client, db, auth_context, monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_admin_invitation_uses_public_base_url(client, db, auth_context, monkeypatch):
+    """PUBLIC_BASE_URL overrides request.url_for for outgoing invitation links."""
+    sent = {}
+
+    def fake_send_invitation_email(recipient, *, inviter_email, account_name, invitation_url, delivery_mode=None):
+        sent.update(
+            recipient=recipient,
+            inviter_email=inviter_email,
+            account_name=account_name,
+            invitation_url=invitation_url,
+        )
+        return {"accepted": True, "kind": "invitation"}
+
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://videobank.example///")
+    monkeypatch.setattr("app.routes.invitations.email_service.send_invitation_email", fake_send_invitation_email)
+
+    response = await client.post(
+        "/account/invitations",
+        data={"email": "public-invitee@example.com", "capabilities": ["manage_videos"]},
+    )
+
+    assert response.status_code == 303
+    assert sent["recipient"] == "public-invitee@example.com"
+    assert sent["invitation_url"].startswith("https://videobank.example/invitations/accept?token=")
+    assert not sent["invitation_url"].startswith("https://videobank.example//")
+
+
+@pytest.mark.asyncio
 async def test_new_user_accepts_after_signup_and_email_verification(client, db, monkeypatch):
     """A new invitee can signup with token context and gets membership after verification."""
     owner = await create_test_user_with_account(db, email="owner@example.com", account_name="Team Videos")
@@ -100,6 +128,43 @@ async def test_new_user_accepts_after_signup_and_email_verification(client, db, 
     assert membership["manage_matches"] == 1
     accepted = await invitation_service.get_invitation_by_id(db, invitation["id"])
     assert accepted["accepted_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_invited_signup_uses_public_base_url_for_email_links(client, db, monkeypatch):
+    """Invited signup verification emails use PUBLIC_BASE_URL for both links."""
+    owner = await create_test_user_with_account(db, email="link-owner@example.com", account_name="Link Team")
+    invitation = await invitation_service.create_invitation(
+        db,
+        account_id=owner["account"]["id"],
+        invited_email="link-invitee@example.com",
+        inviter_user_id=owner["user_id"],
+        capabilities={},
+    )
+    sent = {}
+
+    def fake_send_verification_email(recipient, verification_url, *, invitation_url=None, delivery_mode=None):
+        sent["recipient"] = recipient
+        sent["verification_url"] = verification_url
+        sent["invitation_url"] = invitation_url
+        return {"accepted": True, "kind": "verification"}
+
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://videobank.example/")
+    monkeypatch.setattr("app.routes.auth.email_service.send_verification_email", fake_send_verification_email)
+
+    response = await client.post(
+        "/signup",
+        data={
+            "email": "link-invitee@example.com",
+            "password": "correct-password",
+            "invitation_token": invitation["token"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert sent["verification_url"].startswith("https://videobank.example/verify-email?token=")
+    assert f"invitation_token={invitation['token']}" in sent["verification_url"]
+    assert sent["invitation_url"] == f"https://videobank.example/invitations/accept?token={invitation['token']}"
 
 
 @pytest.mark.asyncio

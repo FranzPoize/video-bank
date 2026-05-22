@@ -1,9 +1,9 @@
 """
 Deterministic email delivery boundary for account emails.
 
-This checkpoint intentionally avoids real network email delivery. The default
-console provider gives developers a visible preview while returning structured,
-stable send metadata that tests can assert against safely.
+The default console provider gives developers a visible preview while returning
+structured, stable send metadata that tests can assert against safely. SMTP mode
+uses Gmail only when explicitly configured.
 """
 
 from __future__ import annotations
@@ -11,13 +11,18 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import smtplib
+from email.message import EmailMessage
 
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_FROM_EMAIL = "Video Bank <no-reply@video-bank.local>"
 DEFAULT_DELIVERY_MODE = "console"
-SUPPORTED_DELIVERY_MODES = {"console", "log", "disabled"}
+SUPPORTED_DELIVERY_MODES = {"console", "log", "disabled", "smtp"}
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT = 587
+SMTP_FROM_NAME = "Videobank"
 
 
 def send_email(
@@ -39,12 +44,12 @@ def send_email(
     clean_subject = _validate_required_text(subject, "Subject")
     clean_text_body = _validate_required_text(text_body, "Email body")
     clean_html_body = html_body.strip() if html_body and html_body.strip() else None
-    sender = (from_email or DEFAULT_FROM_EMAIL).strip()
     mode = (delivery_mode or os.getenv("EMAIL_DELIVERY_MODE") or DEFAULT_DELIVERY_MODE).strip().lower()
 
     if mode not in SUPPORTED_DELIVERY_MODES:
         raise RuntimeError(f"Unsupported email delivery mode: {mode}")
 
+    sender = _smtp_sender() if mode == "smtp" else (from_email or DEFAULT_FROM_EMAIL).strip()
     message_id = _message_id(sender, normalized_recipient, clean_subject, clean_text_body, clean_html_body)
     preview = _build_preview(clean_text_body, clean_html_body)
     accepted = mode != "disabled"
@@ -70,8 +75,10 @@ def send_email(
                 message_id,
                 preview,
             )
+        elif mode == "smtp":
+            _send_smtp_email(result, clean_text_body, clean_html_body)
     except Exception as exc:  # pragma: no cover - defensive infrastructure boundary
-        logger.error("Email delivery boundary failed: %s", exc)
+        logger.error("Email delivery boundary failed: provider=%s", mode)
         raise RuntimeError("Email delivery boundary failed") from exc
 
     if accepted:
@@ -183,6 +190,37 @@ def _build_preview(text_body: str, html_body: str | None) -> str:
     """Return a compact preview suitable for logs and tests."""
     source = html_body or text_body
     return " ".join(source.split())[:500]
+
+
+def _smtp_sender() -> str:
+    """Return the configured Gmail sender header for SMTP delivery."""
+    account = (os.getenv("EMAIL_ACCOUNT") or "").strip()
+    password = (os.getenv("EMAIL_PASSWORD") or "").strip()
+    if not account or not password:
+        raise RuntimeError("EMAIL_ACCOUNT and EMAIL_PASSWORD are required for SMTP delivery")
+    return f"{SMTP_FROM_NAME} <{account}>"
+
+
+def _send_smtp_email(result: dict, text_body: str, html_body: str | None) -> None:
+    """Send an email through Gmail SMTP using configured app credentials."""
+    account = (os.getenv("EMAIL_ACCOUNT") or "").strip()
+    password = (os.getenv("EMAIL_PASSWORD") or "").strip()
+    if not account or not password:
+        raise RuntimeError("EMAIL_ACCOUNT and EMAIL_PASSWORD are required for SMTP delivery")
+
+    message = EmailMessage()
+    message["From"] = result["sender"]
+    message["To"] = result["recipient"]
+    message["Subject"] = result["subject"]
+    message["Message-ID"] = result["message_id"]
+    message.set_content(text_body)
+    if html_body:
+        message.add_alternative(html_body, subtype="html")
+
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as smtp:
+        smtp.starttls()
+        smtp.login(account, password)
+        smtp.send_message(message)
 
 
 def _print_development_email(result: dict, text_body: str, html_body: str | None) -> None:

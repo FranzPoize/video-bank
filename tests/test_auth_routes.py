@@ -55,6 +55,33 @@ class TestSignupRoutes:
         token_count = await (await db.execute("SELECT COUNT(*) AS count FROM email_verification_tokens")).fetchone()
         assert token_count["count"] == 1
 
+    @pytest.mark.asyncio
+    async def test_signup_uses_public_base_url_for_verification_email(self, client, monkeypatch):
+        """PUBLIC_BASE_URL overrides request.url_for for outgoing verification links."""
+        sent = {}
+
+        def fake_send_verification_email(recipient, verification_url, *, delivery_mode=None):
+            sent["recipient"] = recipient
+            sent["verification_url"] = verification_url
+            sent["delivery_mode"] = delivery_mode
+            return {"accepted": True, "kind": "verification"}
+
+        monkeypatch.setenv("PUBLIC_BASE_URL", "https://videobank.example/")
+        monkeypatch.setattr(
+            "app.routes.auth.email_service.send_verification_email",
+            fake_send_verification_email,
+        )
+
+        response = await client.post(
+            "/signup",
+            data={"email": "public-base@example.com", "password": "correct-password"},
+        )
+
+        assert response.status_code == 200
+        assert sent["recipient"] == "public-base@example.com"
+        assert sent["verification_url"].startswith("https://videobank.example/verify-email?token=")
+        assert not sent["verification_url"].startswith("https://videobank.example//")
+
 
 class TestEmailVerificationRoute:
     """Tests for email verification route behavior."""

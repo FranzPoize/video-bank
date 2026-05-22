@@ -10,6 +10,11 @@ WorkingDirectory=/home/ubuntu/video-bank
 Environment="DATABASE_PATH=/home/ubuntu/video-bank/data/video_bank.db"
 Environment="ALLOWED_EXTENSIONS=mp4,webm,mov"
 Environment="LOG_DIR=/opt/video-bank/logs"
+# Placeholder email/public URL configuration; replace with deployment-specific values.
+# Environment="EMAIL_DELIVERY_MODE=smtp"
+# Environment="EMAIL_ACCOUNT=your-gmail-address@example.com"
+# Environment="EMAIL_PASSWORD=your-gmail-app-password"
+# Environment="PUBLIC_BASE_URL=https://your-domain.example"
 ExecStartPre=mkdir -p /opt/video-bank/logs
 ExecStartPre=chown ubuntu:ubuntu /opt/video-bank/logs
 ExecStart=/home/ubuntu/video-bank/venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 4322

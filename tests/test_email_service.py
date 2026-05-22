@@ -5,6 +5,8 @@ The email service is intentionally network-free for this checkpoint: it returns
 structured send results and logs/prints enough information for development.
 """
 
+from unittest.mock import patch
+
 import pytest
 
 from app.services import email_service
@@ -67,6 +69,66 @@ class TestEmailService:
         assert result["recipient"] == "user@example.com"
         assert capsys.readouterr().out == ""
 
+    def test_smtp_mode_sends_gmail_message(self, monkeypatch):
+        """smtp mode sends through Gmail with the configured app credentials."""
+        monkeypatch.setenv("EMAIL_ACCOUNT", "sender@gmail.com")
+        monkeypatch.setenv("EMAIL_PASSWORD", "app-password")
+
+        with patch("app.services.email_service.smtplib.SMTP") as mock_smtp:
+            smtp_client = mock_smtp.return_value.__enter__.return_value
+
+            result = email_service.send_email(
+                "User@Example.COM",
+                "Subject",
+                "Plain body",
+                html_body="<p>HTML body</p>",
+                delivery_mode="smtp",
+            )
+
+        mock_smtp.assert_called_once_with("smtp.gmail.com", 587)
+        smtp_client.starttls.assert_called_once_with()
+        smtp_client.login.assert_called_once_with("sender@gmail.com", "app-password")
+        smtp_client.send_message.assert_called_once()
+        message = smtp_client.send_message.call_args.args[0]
+        assert message["From"] == "Videobank <sender@gmail.com>"
+        assert message["To"] == "user@example.com"
+        assert message["Subject"] == "Subject"
+        assert "Plain body" in message.get_body(preferencelist=("plain",)).get_content()
+        assert "HTML body" in message.get_body(preferencelist=("html",)).get_content()
+
+        assert result["accepted"] is True
+        assert result["provider"] == "smtp"
+        assert result["recipient"] == "user@example.com"
+        assert result["sender"] == "Videobank <sender@gmail.com>"
+        assert result["subject"] == "Subject"
+        assert result["preview"] == "<p>HTML body</p>"
+        assert result["message_id"].startswith("dev-")
+
+    def test_smtp_mode_can_be_selected_from_environment(self, monkeypatch):
+        """EMAIL_DELIVERY_MODE=smtp is accepted as a supported delivery mode."""
+        monkeypatch.setenv("EMAIL_DELIVERY_MODE", "smtp")
+        monkeypatch.setenv("EMAIL_ACCOUNT", "sender@gmail.com")
+        monkeypatch.setenv("EMAIL_PASSWORD", "app-password")
+
+        with patch("app.services.email_service.smtplib.SMTP") as mock_smtp:
+            result = email_service.send_email("user@example.com", "Subject", "Body")
+
+        assert result["provider"] == "smtp"
+        mock_smtp.return_value.__enter__.return_value.send_message.assert_called_once()
+
+    def test_smtp_mode_requires_gmail_configuration(self, monkeypatch):
+        """smtp mode fails fast when Gmail credentials are not configured."""
+        monkeypatch.delenv("EMAIL_ACCOUNT", raising=False)
+        monkeypatch.delenv("EMAIL_PASSWORD", raising=False)
+
+        with pytest.raises(RuntimeError, match="EMAIL_ACCOUNT and EMAIL_PASSWORD are required"):
+            email_service.send_email(
+                "user@example.com",
+                "Subject",
+                "Body",
+                delivery_mode="smtp",
+            )
+
     def test_unknown_delivery_mode_is_infrastructure_failure(self):
         """Unknown configured delivery modes fail as infrastructure errors."""
         with pytest.raises(RuntimeError, match="Unsupported email delivery mode"):
@@ -74,7 +136,7 @@ class TestEmailService:
                 "user@example.com",
                 "Subject",
                 "Body",
-                delivery_mode="smtp",
+                delivery_mode="unknown",
             )
 
 

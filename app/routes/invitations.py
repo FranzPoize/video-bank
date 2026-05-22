@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -72,6 +73,9 @@ async def _list_pending_invitations(db, account_id: int) -> list[dict]:
 
 def _invitation_url(request: Request, token: str) -> str:
     """Build an absolute invitation acceptance URL for outgoing emails."""
+    public_base_url = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if public_base_url:
+        return f"{public_base_url}{request.app.url_path_for('accept_invitation_form')}?token={token}"
     return str(request.url_for("accept_invitation_form")) + f"?token={token}"
 
 

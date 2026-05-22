@@ -247,6 +247,12 @@ All configuration is via environment variables (no `.env` files):
 | `ALLOWED_EXTENSIONS` | `mp4,webm,mov` | Comma-separated allowed upload formats |
 | `MAX_UPLOAD_SIZE` | `2147483648` (2GB) | Max upload size in bytes |
 | `THUMBNAIL_TIME` | `1` | Seconds into video for thumbnail frame |
+| `EMAIL_DELIVERY_MODE` | `console` | Email delivery mode; deployment placeholder example: `smtp` |
+| `EMAIL_ACCOUNT` | unset | SMTP account placeholder example: `your-gmail-address@example.com` |
+| `EMAIL_PASSWORD` | unset | SMTP app password placeholder example: `your-gmail-app-password` |
+| `PUBLIC_BASE_URL` | unset | Public URL placeholder example: `https://your-domain.example` |
+
+Do not commit real credentials. Replace placeholder email and public URL values in the systemd unit or shell environment for the deployment host.
 
 The `video-bank.service` systemd unit sets production defaults:
 - Port: **4322**

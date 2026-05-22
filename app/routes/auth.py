@@ -1,5 +1,7 @@
 """Server-rendered signup, email verification, login, and logout routes."""
 
+import os
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 
@@ -29,10 +31,23 @@ def _current_user_context(current_session: dict | None = None) -> dict:
 
 def _verification_url(request: Request, token: str, invitation_token: str | None = None) -> str:
     """Build an absolute email verification URL for outgoing emails."""
-    url = str(request.url_for("verify_email")) + f"?token={token}"
+    url = _absolute_route_url(request, "verify_email") + f"?token={token}"
     if invitation_token:
         url += f"&invitation_token={invitation_token}"
     return url
+
+
+def _invitation_url(request: Request, token: str) -> str:
+    """Build an absolute invitation acceptance URL for outgoing emails."""
+    return _absolute_route_url(request, "accept_invitation_form") + f"?token={token}"
+
+
+def _absolute_route_url(request: Request, route_name: str) -> str:
+    """Build an absolute route URL, honoring PUBLIC_BASE_URL when configured."""
+    public_base_url = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if public_base_url:
+        return f"{public_base_url}{request.app.url_path_for(route_name)}"
+    return str(request.url_for(route_name))
 
 
 @router.get("/signup")
@@ -74,7 +89,7 @@ async def signup(
             email_service.send_verification_email(
                 user["email"],
                 verification_url,
-                invitation_url=str(request.url_for("accept_invitation_form")) + f"?token={invitation_token}",
+                invitation_url=_invitation_url(request, invitation_token),
             )
         else:
             email_service.send_verification_email(user["email"], verification_url)
